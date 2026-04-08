@@ -6,21 +6,23 @@ from fpdf import FPDF
 from supabase import create_client, Client
 import streamlit as st
 
-# Configuração da página
-st.set_page_config(page_title="VoltSpec Pro", page_icon="⚡")
+st.set_page_config(
+    page_title="VoltSpec Pro",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed" # Melhora a visão no celular ao abrir
+)
 
-# Injeção de metadados para mobile (PWA)
+# Forçar o modo 'Standalone' (abre como app, sem barra de endereço)
 st.markdown("""
-    <head>
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    </head>
-    <style>
-        /* Remove espaços desnecessários no mobile */
-        .main .block-container {padding-top: 1rem; padding-bottom: 1rem;}
-        footer {visibility: hidden;}
-    </style>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="VoltSpec Pro">
+    <meta name="apple-mobile-web-app-title" content="VoltSpec Pro">
+    <meta name="theme-color" content="#000000">
+    <meta name="msapplication-navbutton-color" content="#000000">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     """, unsafe_allow_html=True)
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA) ---
