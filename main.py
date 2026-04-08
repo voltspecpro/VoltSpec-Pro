@@ -4,15 +4,41 @@ import math
 from datetime import datetime
 from fpdf import FPDF
 from supabase import create_client, Client
+import streamlit as st
+
+# Configuração da página
+st.set_page_config(page_title="VoltSpec Pro", page_icon="⚡")
+
+# Injeção de metadados para mobile (PWA)
+st.markdown("""
+    <head>
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    </head>
+    <style>
+        /* Remove espaços desnecessários no mobile */
+        .main .block-container {padding-top: 1rem; padding-bottom: 1rem;}
+        footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA) ---
 st.set_page_config(
     page_title="VoltSpec Pro",
-    page_icon="⚡", 
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
+# Injeção de CSS para esconder botões do Streamlit e parecer App nativo
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
 # --- 2. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = "https://drhcokdzqycmdkshceub.supabase.co"
 KEY_SUPA = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyaGNva2R6cXljbWRrc2hjZXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjA0MDQsImV4cCI6MjA5MDgzNjQwNH0.FrN2x_Tgq8m_ZIYCt6Ht0R3dMU3_RQUwGLAw3Pfgbm0"
