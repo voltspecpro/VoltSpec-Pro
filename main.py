@@ -504,7 +504,11 @@ elif aba == "🛒 Produtos":
         {"nome": "Jogo Chaves Isoladas", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_701755-MLB85959666529_062025-F.webp", "link": "https://meli.la/2xLSiQJ"},
         {"nome": "Alicate Decapador Vonder", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_608489-MLA99480826142_112025-F.webp", "link": "https://meli.la/2L47LTv"},
         {"nome": "Bolsa Ferramentas Reforçada", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_947240-MLA99992405049_112025-F.webp", "link": "https://meli.la/1E4on12"},
-        {"nome": "Alicate Crimpar Prensa", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_928036-MLA99440131490_112025-F.webp", "link": "https://meli.la/247XSK7"}
+        {"nome": "Alicate Crimpar Prensa", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_928036-MLA99440131490_112025-F.webp", "link": "https://meli.la/247XSK7"},
+        {"nome": "Kit Eletrica Chave Teste Digital + Caneta Detectora Tensão B Basto", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_925244-MLA102644904043_122025-F.webp", "link": "https://meli.la/214x31Y"},
+        {"nome": "Alicate Universal Eletricista 8 Sata Isolado 1000V Aço Cr-V Amarelo", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_718013-MLA96100316665_102025-F.webp", "link": "https://meli.la/14aG1bU"},
+        {"nome": "Cinto Pochete Porta Ferramentas Eletricista Carpinteiro Facilidade", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_993974-MLA96427705692_102025-F.webp", "link": "https://meli.la/1RKgafT"},
+        {"nome": "Cinturão Carpinteiro Pedreiro Eletricista Bolsa Multifuncion", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_798036-MLB106606586781_022026-F.webp", "link": "https://meli.la/1JcRtAG"},
     ]
     
     cols = st.columns(4)
