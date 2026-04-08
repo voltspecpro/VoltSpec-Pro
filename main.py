@@ -132,9 +132,7 @@ def salvar_perfil_supabase():
             "nome_empresa": st.session_state.nome_empresa,
             "crt": st.session_state.crt,
             "telefone": st.session_state.telefone,
-            "cnpj": st.session_state.cnpj,
-            "endereco": st.session_state.endereco,
-            "email_contato": st.session_state.email_contato,
+            "cnpj":  st.session_state.cnpj,
             "email": st.session_state.user.email
         }
         supabase.table("profiles").upsert(dados).execute()
@@ -246,7 +244,7 @@ elif aba == "🏠 Cargas":
         
         # Dicionário para acumular os cabos por bitola e via
         cabos = {
-            "1.5mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "1.5mm²": {"Fase": 0, "Neutro": 0},
             "2.5mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
             "4.0mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
             "6.0mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
@@ -360,7 +358,7 @@ elif aba == "🏠 Cargas":
                 materiais_dinamicos.append({"Item": f"Cabo Flexível {bitola} (Fase/Retorno)", "Qtd": f"{math.ceil(vias['Fase'])}m"})
             if vias["Neutro"] > 0:
                 materiais_dinamicos.append({"Item": f"Cabo Flexível {bitola} (Neutro - Azul)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
-            if vias["Terra"] > 0:
+            if vias.get("Terra", 0) > 0:
                 materiais_dinamicos.append({"Item": f"Cabo Flexível {bitola} (Terra - Verde)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
 
         # 2. Contar e Inserir Disjuntores do QDC
