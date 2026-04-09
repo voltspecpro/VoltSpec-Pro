@@ -244,11 +244,11 @@ elif aba == "🏠 Cargas":
         
         # Dicionário para acumular os cabos por bitola e via
         cabos = {
-            "1.5mm²": {"Fase": 0, "Neutro": 0},
+            "1.5mm²": {"Fase": 0, "Neutro": 0,"Terra": 0},
             "2.5mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
             "4.0mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
             "6.0mm²": {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "10.0mm²": {"Fase": 0, "Neutro": 0, "Terra": 0}
+            "10.0mm²":{"Fase": 0, "Neutro": 0, "Terra": 0},
         }
         
         for i, r in df_calc.iterrows():
@@ -271,7 +271,7 @@ elif aba == "🏠 Cargas":
                 comp_15 = p + (qtd_lamp * 3.5)
                 cabos["1.5mm²"]["Fase"] += comp_15 * 1.5 # Adiciona margem para retornos
                 cabos["1.5mm²"]["Neutro"] += comp_15
-                cabos["1.5mm²"]["Terra"] += comp_15
+            
 
                 # --- CÁLCULO TUGs (Tomadas de Uso Geral) ---
                 is_molhada = any(x in nome for x in ["cozinha", "banheiro", "serviço", "lavanderia", "copa", "wc"])
