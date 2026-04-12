@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import math
@@ -36,6 +35,7 @@ st.markdown("""
 # --- 2. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = st.secrets.get("SUPABASE_URL", "")
 KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
+ 
 def init_connection():
     try:
         return create_client(URL_SUPA, KEY_SUPA)
@@ -50,7 +50,6 @@ if supabase is None:
  
 # --- FUNÇÃO AUXILIAR: cliente autenticado com token da sessão ---
 def get_supabase_autenticado():
-    """Retorna cliente Supabase com token do usuário logado para respeitar RLS"""
     try:
         session = st.session_state.get('session')
         if session and session.access_token:
@@ -62,13 +61,11 @@ def get_supabase_autenticado():
 # --- 3. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
  
 def limpar_texto(txt):
-    """Remove emojis e caracteres especiais que travam o FPDF latin-1"""
     if not txt:
         return ""
     return str(txt).encode('latin-1', 'ignore').decode('latin-1').replace("²", "2").strip()
  
 def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
-    """Gera PDF para Orçamentos ou Materiais"""
     pdf = FPDF()
     pdf.add_page()
  
@@ -125,20 +122,23 @@ def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
 def carregar_perfil_supabase():
     if supabase is None:
         return
-    if 'user' in st.session_state and st.session_state.user:
-        try:
-            cliente = get_supabase_autenticado()
-            res = cliente.table("profiles").select("*").eq("id", st.session_state.user.id).execute()
-            if res.data:
-                d = res.data[0]
-                st.session_state.nome_empresa = d.get('nome_empresa', '')
-                st.session_state.crt = d.get('crt', '')
-                st.session_state.telefone = d.get('telefone', '')
-                st.session_state.cnpj = d.get('cnpj', '')
-                st.session_state.endereco = d.get('endereco_comercial', '')
-                st.session_state.email_contato = d.get('email', '')
-        except Exception as e:
-            st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
+    if 'user' not in st.session_state or not st.session_state.user:
+        return
+    try:
+        cliente = get_supabase_autenticado()
+        res = cliente.table("profiles").select("*").eq("id", st.session_state.user.id).execute()
+        if res.data:
+            d = res.data[0]
+            # CORREÇÃO: atualiza diretamente no session_state com colchetes
+            # para garantir que os valores sejam salvos antes de qualquer widget renderizar
+            st.session_state['nome_empresa'] = d.get('nome_empresa', '')
+            st.session_state['crt'] = d.get('crt', '')
+            st.session_state['telefone'] = d.get('telefone', '')
+            st.session_state['cnpj'] = d.get('cnpj', '')
+            st.session_state['endereco'] = d.get('endereco_comercial', '')
+            st.session_state['email_contato'] = d.get('email', '')
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
  
 def salvar_perfil_supabase():
     if supabase is None:
@@ -148,12 +148,12 @@ def salvar_perfil_supabase():
         cliente = get_supabase_autenticado()
         dados = {
             "id": st.session_state.user.id,
-            "nome_empresa": st.session_state.nome_empresa,
-            "crt": st.session_state.crt,
-            "telefone": st.session_state.telefone,
-            "cnpj": st.session_state.cnpj,
+            "nome_empresa": st.session_state.get('nome_empresa', ''),
+            "crt": st.session_state.get('crt', ''),
+            "telefone": st.session_state.get('telefone', ''),
+            "cnpj": st.session_state.get('cnpj', ''),
             "email": st.session_state.user.email,
-            "endereco_comercial": st.session_state.endereco
+            "endereco_comercial": st.session_state.get('endereco', '')
         }
         cliente.table("profiles").upsert(dados).execute()
         st.success("✅ Sincronizado!")
@@ -167,6 +167,8 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'session' not in st.session_state:
     st.session_state.session = None
+if 'perfil_carregado' not in st.session_state:
+    st.session_state.perfil_carregado = False
  
 if 'dados_cargas' not in st.session_state:
     st.session_state.dados_cargas = pd.DataFrame([{
@@ -204,9 +206,9 @@ if not st.session_state.logado:
                     res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
                     if res.user:
                         st.session_state.user = res.user
-                        st.session_state.session = res.session  # SALVA TOKEN DA SESSÃO
+                        st.session_state.session = res.session  # salva token ANTES de rerun
                         st.session_state.logado = True
-                        carregar_perfil_supabase()
+                        st.session_state.perfil_carregado = False  # força recarregar
                         st.rerun()
                 except Exception as e:
                     st.error(f"Falha no login: {e}")
@@ -224,12 +226,20 @@ if not st.session_state.logado:
                     st.error(f"Erro no cadastro: {e}")
     st.stop()
  
+# --- CORREÇÃO PRINCIPAL: carrega perfil DEPOIS do rerun, quando session já está salva ---
+if st.session_state.logado and not st.session_state.perfil_carregado:
+    carregar_perfil_supabase()
+    st.session_state.perfil_carregado = True
+ 
 # --- 7. SISTEMA PRINCIPAL ---
 st.sidebar.title("VoltSpec Pro ⚡")
 if st.sidebar.button("Sair"):
     st.session_state.logado = False
     st.session_state.user = None
     st.session_state.session = None
+    st.session_state.perfil_carregado = False
+    for chave in chaves_perfil:
+        st.session_state[chave] = ''
     st.rerun()
  
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
@@ -284,7 +294,6 @@ elif aba == "🏠 Cargas":
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
         df_calc = df_editor.copy()
         novos_circuitos = []
- 
         pot_ilum_total = 0
         pot_tug_total = 0
  
@@ -302,7 +311,6 @@ elif aba == "🏠 Cargas":
                 p = float(r["Perimetro (m)"])
                 nome = str(r["Comodo"]).lower()
  
-                # CÁLCULO ILUMINAÇÃO (NBR 5410)
                 if a <= 6:
                     va_ilum = 100
                 else:
@@ -316,7 +324,6 @@ elif aba == "🏠 Cargas":
                 cabos["1.5mm2"]["Fase"] += comp_15 * 1.5
                 cabos["1.5mm2"]["Neutro"] += comp_15
  
-                # CÁLCULO TUGs
                 is_molhada = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
                 is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
  
@@ -339,7 +346,6 @@ elif aba == "🏠 Cargas":
                 cabos["2.5mm2"]["Neutro"] += comp_25
                 cabos["2.5mm2"]["Terra"] += comp_25
  
-                # CÁLCULO TUE
                 tue_w = float(r["TUE (Watts)"])
                 if tue_w > 0:
                     v_tue = 220 if (tue_w >= 4000 or tensao_fase == 220) else 127
@@ -380,7 +386,6 @@ elif aba == "🏠 Cargas":
                 st.warning(f"Erro na linha {i}: {e}")
                 continue
  
-        # CIRCUITOS GERAIS
         if pot_ilum_total > 0:
             novos_circuitos.insert(0, {
                 "Circ": "C01", "Descricao": "Iluminacao Geral",
@@ -394,9 +399,7 @@ elif aba == "🏠 Cargas":
                 "Cabo": "2.5mm2", "Disjuntor": "20A", "Tipo Disj.": "Unipolar"
             })
  
-        # GERAÇÃO DE MATERIAIS
         materiais_dinamicos = []
- 
         for bitola, vias in cabos.items():
             if vias["Fase"] > 0:
                 materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase/Retorno)", "Qtd": f"{math.ceil(vias['Fase'])}m"})
@@ -579,7 +582,6 @@ elif aba == "📐 Dimensionador":
  
     ib = pot / tensao
     ib_corrigida = ib / fator_agrup
- 
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
  
     if ib_corrigida <= 15.5:
@@ -594,7 +596,6 @@ elif aba == "📐 Dimensionador":
         bitola_sugerida = 10.0
  
     bitola_final = max(bitola_sugerida, bitola_minima)
- 
     queda_v = (2 * dist * ib * 0.0172) / bitola_final
     percentual_queda = (queda_v / tensao) * 100
  
