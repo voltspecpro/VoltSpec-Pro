@@ -65,29 +65,60 @@ def limpar_texto(txt):
         return ""
     return str(txt).encode('latin-1', 'ignore').decode('latin-1').replace("²", "2").strip()
  
+def montar_cabecalho_pdf(pdf):
+    """
+    Monta cabeçalho padronizado com dados do perfil do técnico.
+    Usado em todos os PDFs do sistema.
+    """
+    emp      = limpar_texto(st.session_state.get('nome_empresa', '')) or 'VoltSpec Pro'
+    crt      = limpar_texto(st.session_state.get('crt', ''))
+    tel      = limpar_texto(st.session_state.get('telefone', ''))
+    cnpj     = limpar_texto(st.session_state.get('cnpj', ''))
+    cidade   = limpar_texto(st.session_state.get('endereco', ''))
+    email    = limpar_texto(st.session_state.get('email_contato', ''))
+ 
+    # Fundo escuro
+    pdf.set_fill_color(30, 41, 59)
+    pdf.rect(0, 0, 210, 50, 'F')
+    pdf.set_text_color(255, 255, 255)
+ 
+    # Nome da empresa (grande)
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_xy(0, 6)
+    pdf.cell(210, 10, emp.upper(), align="C", ln=True)
+ 
+    # Linha 1: CRT e Telefone
+    linha1 = ""
+    if crt:  linha1 += f"Reg.: {crt}"
+    if tel:  linha1 += f"  |  Tel: {tel}"
+    if linha1:
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(210, 6, linha1.strip(), align="C", ln=True)
+ 
+    # Linha 2: CNPJ e Cidade
+    linha2 = ""
+    if cnpj:   linha2 += f"CNPJ: {cnpj}"
+    if cidade: linha2 += f"  |  {cidade}"
+    if linha2:
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(210, 6, linha2.strip(), align="C", ln=True)
+ 
+    # Linha 3: E-mail
+    if email:
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(210, 6, email, align="C", ln=True)
+ 
+    # Volta cor de texto para preto
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(8)
+ 
 def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
+    """Gera PDF para Orçamentos ou Materiais — com cabeçalho do perfil"""
     pdf = FPDF()
     pdf.add_page()
  
-    pdf.set_fill_color(30, 41, 59)
-    pdf.rect(0, 0, 210, 40, 'F')
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(255, 255, 255)
+    montar_cabecalho_pdf(pdf)
  
-    emp = st.session_state.get('nome_empresa', '')
-    if not emp:
-        emp = 'VoltSpec Pro'
- 
-    reg = st.session_state.get('crt', '')
-    tel = st.session_state.get('telefone', '')
-    sub_texto = f"Registro: {reg} | Tel: {tel}" if reg or tel else "Tecnico Responsavel"
- 
-    pdf.cell(190, 15, limpar_texto(emp), ln=True, align="C")
-    pdf.set_font("Arial", "", 9)
-    pdf.cell(190, 5, limpar_texto(sub_texto), ln=True, align="C")
-    pdf.ln(15)
- 
-    pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"RELATORIO: {limpar_texto(titulo)}", "B", 1, "L")
     pdf.set_font("Arial", "I", 8)
@@ -129,13 +160,11 @@ def carregar_perfil_supabase():
         res = cliente.table("profiles").select("*").eq("id", st.session_state.user.id).execute()
         if res.data:
             d = res.data[0]
-            # CORREÇÃO: atualiza diretamente no session_state com colchetes
-            # para garantir que os valores sejam salvos antes de qualquer widget renderizar
-            st.session_state['nome_empresa'] = d.get('nome_empresa', '')
-            st.session_state['crt'] = d.get('crt', '')
-            st.session_state['telefone'] = d.get('telefone', '')
-            st.session_state['cnpj'] = d.get('cnpj', '')
-            st.session_state['endereco'] = d.get('endereco_comercial', '')
+            st.session_state['nome_empresa']  = d.get('nome_empresa', '')
+            st.session_state['crt']           = d.get('crt', '')
+            st.session_state['telefone']      = d.get('telefone', '')
+            st.session_state['cnpj']          = d.get('cnpj', '')
+            st.session_state['endereco']      = d.get('endereco_comercial', '')
             st.session_state['email_contato'] = d.get('email', '')
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
@@ -147,13 +176,13 @@ def salvar_perfil_supabase():
     try:
         cliente = get_supabase_autenticado()
         dados = {
-            "id": st.session_state.user.id,
-            "nome_empresa": st.session_state.get('nome_empresa', ''),
-            "crt": st.session_state.get('crt', ''),
-            "telefone": st.session_state.get('telefone', ''),
-            "cnpj": st.session_state.get('cnpj', ''),
-            "email": st.session_state.user.email,
-            "endereco_comercial": st.session_state.get('endereco', '')
+            "id":                st.session_state.user.id,
+            "nome_empresa":      st.session_state.get('nome_empresa', ''),
+            "crt":               st.session_state.get('crt', ''),
+            "telefone":          st.session_state.get('telefone', ''),
+            "cnpj":              st.session_state.get('cnpj', ''),
+            "email":             st.session_state.user.email,
+            "endereco_comercial":st.session_state.get('endereco', '')
         }
         cliente.table("profiles").upsert(dados).execute()
         st.success("✅ Sincronizado!")
@@ -172,13 +201,9 @@ if 'perfil_carregado' not in st.session_state:
  
 if 'dados_cargas' not in st.session_state:
     st.session_state.dados_cargas = pd.DataFrame([{
-        "Comodo": "Sala",
-        "Area (m2)": 0.0,
-        "Perimetro (m)": 0.0,
-        "Iluminacao (VA)": "-",
-        "TUG (Qtd)": 0,
-        "Potencia TUG (VA)": 0.0,
-        "TUE (Watts)": 0.0
+        "Comodo": "Sala", "Area (m2)": 0.0, "Perimetro (m)": 0.0,
+        "Iluminacao (VA)": "-", "TUG (Qtd)": 0,
+        "Potencia TUG (VA)": 0.0, "TUE (Watts)": 0.0
     }])
  
 if 'lista_circuitos' not in st.session_state:
@@ -205,10 +230,10 @@ if not st.session_state.logado:
                 try:
                     res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
                     if res.user:
-                        st.session_state.user = res.user
-                        st.session_state.session = res.session  # salva token ANTES de rerun
-                        st.session_state.logado = True
-                        st.session_state.perfil_carregado = False  # força recarregar
+                        st.session_state.user    = res.user
+                        st.session_state.session = res.session
+                        st.session_state.logado  = True
+                        st.session_state.perfil_carregado = False
                         st.rerun()
                 except Exception as e:
                     st.error(f"Falha no login: {e}")
@@ -226,7 +251,7 @@ if not st.session_state.logado:
                     st.error(f"Erro no cadastro: {e}")
     st.stop()
  
-# --- CORREÇÃO PRINCIPAL: carrega perfil DEPOIS do rerun, quando session já está salva ---
+# --- CARREGA PERFIL APÓS LOGIN (uma única vez por sessão) ---
 if st.session_state.logado and not st.session_state.perfil_carregado:
     carregar_perfil_supabase()
     st.session_state.perfil_carregado = True
@@ -235,7 +260,7 @@ if st.session_state.logado and not st.session_state.perfil_carregado:
 st.sidebar.title("VoltSpec Pro ⚡")
 if st.sidebar.button("Sair"):
     st.session_state.logado = False
-    st.session_state.user = None
+    st.session_state.user   = None
     st.session_state.session = None
     st.session_state.perfil_carregado = False
     for chave in chaves_perfil:
@@ -298,67 +323,56 @@ elif aba == "🏠 Cargas":
         pot_tug_total = 0
  
         cabos = {
-            "1.5mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "2.5mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "4.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "6.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "1.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "2.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "4.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "6.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
             "10.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
         }
  
         for i, r in df_calc.iterrows():
             try:
-                a = float(r["Area (m2)"])
-                p = float(r["Perimetro (m)"])
+                a    = float(r["Area (m2)"])
+                p    = float(r["Perimetro (m)"])
                 nome = str(r["Comodo"]).lower()
  
-                if a <= 6:
-                    va_ilum = 100
-                else:
-                    va_ilum = 100 + (math.floor((a - 6) / 4) * 60)
- 
+                va_ilum = 100 if a <= 6 else 100 + (math.floor((a - 6) / 4) * 60)
                 qtd_lamp = max(math.ceil(va_ilum / 100), 1)
                 df_calc.at[i, "Iluminacao (VA)"] = f"{qtd_lamp} pt ({va_ilum}VA)"
                 pot_ilum_total += va_ilum
  
                 comp_15 = p + (qtd_lamp * 3.5)
-                cabos["1.5mm2"]["Fase"] += comp_15 * 1.5
+                cabos["1.5mm2"]["Fase"]  += comp_15 * 1.5
                 cabos["1.5mm2"]["Neutro"] += comp_15
  
-                is_molhada = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
+                is_molhada  = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
                 is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
  
                 if is_banheiro:
                     q_tugs, p_tugs = 1, 600
                 else:
-                    div = 3.5 if is_molhada else 5.0
+                    div    = 3.5 if is_molhada else 5.0
                     q_tugs = max(math.ceil(p / div), 1)
-                    if is_molhada:
-                        p_tugs = (min(q_tugs, 3) * 600) + (max(0, q_tugs - 3) * 100)
-                    else:
-                        p_tugs = q_tugs * 100
+                    p_tugs = (min(q_tugs, 3) * 600 + max(0, q_tugs - 3) * 100) if is_molhada else q_tugs * 100
  
-                df_calc.at[i, "TUG (Qtd)"] = int(q_tugs)
+                df_calc.at[i, "TUG (Qtd)"]        = int(q_tugs)
                 df_calc.at[i, "Potencia TUG (VA)"] = float(p_tugs)
                 pot_tug_total += p_tugs
  
                 comp_25 = p + (q_tugs * 1.5)
-                cabos["2.5mm2"]["Fase"] += comp_25
+                cabos["2.5mm2"]["Fase"]  += comp_25
                 cabos["2.5mm2"]["Neutro"] += comp_25
-                cabos["2.5mm2"]["Terra"] += comp_25
+                cabos["2.5mm2"]["Terra"]  += comp_25
  
                 tue_w = float(r["TUE (Watts)"])
                 if tue_w > 0:
-                    v_tue = 220 if (tue_w >= 4000 or tensao_fase == 220) else 127
+                    v_tue    = 220 if (tue_w >= 4000 or tensao_fase == 220) else 127
                     corrente = tue_w / v_tue
  
-                    if corrente <= 21:
-                        bitola = "2.5mm2"
-                    elif corrente <= 28:
-                        bitola = "4.0mm2"
-                    elif corrente <= 36:
-                        bitola = "6.0mm2"
-                    else:
-                        bitola = "10.0mm2"
+                    if corrente <= 21:   bitola = "2.5mm2"
+                    elif corrente <= 28: bitola = "4.0mm2"
+                    elif corrente <= 36: bitola = "6.0mm2"
+                    else:                bitola = "10.0mm2"
  
                     disjuntor = "20A" if corrente <= 16 else ("25A" if corrente <= 21 else ("32A" if corrente <= 28 else "40A"))
                     tipo_disj = "Bipolar" if v_tue == 220 else "Unipolar"
@@ -375,56 +389,48 @@ elif aba == "🏠 Cargas":
  
                     comp_tue = (p / 2) + 4.0
                     if v_tue == 220 and tensao_fase == 127:
-                        cabos[bitola]["Fase"] += comp_tue * 2
+                        cabos[bitola]["Fase"]  += comp_tue * 2
                         cabos[bitola]["Terra"] += comp_tue
                     else:
-                        cabos[bitola]["Fase"] += comp_tue
+                        cabos[bitola]["Fase"]  += comp_tue
                         cabos[bitola]["Neutro"] += comp_tue
-                        cabos[bitola]["Terra"] += comp_tue
+                        cabos[bitola]["Terra"]  += comp_tue
  
             except Exception as e:
                 st.warning(f"Erro na linha {i}: {e}")
                 continue
  
         if pot_ilum_total > 0:
-            novos_circuitos.insert(0, {
-                "Circ": "C01", "Descricao": "Iluminacao Geral",
+            novos_circuitos.insert(0, {"Circ": "C01", "Descricao": "Iluminacao Geral",
                 "Potencia": f"{pot_ilum_total}VA", "Tensao": f"{tensao_fase}V",
-                "Cabo": "1.5mm2", "Disjuntor": "10A", "Tipo Disj.": "Unipolar"
-            })
+                "Cabo": "1.5mm2", "Disjuntor": "10A", "Tipo Disj.": "Unipolar"})
         if pot_tug_total > 0:
-            novos_circuitos.insert(1, {
-                "Circ": "C02", "Descricao": "Tomadas Gerais (TUGs)",
+            novos_circuitos.insert(1, {"Circ": "C02", "Descricao": "Tomadas Gerais (TUGs)",
                 "Potencia": f"{pot_tug_total}VA", "Tensao": f"{tensao_fase}V",
-                "Cabo": "2.5mm2", "Disjuntor": "20A", "Tipo Disj.": "Unipolar"
-            })
+                "Cabo": "2.5mm2", "Disjuntor": "20A", "Tipo Disj.": "Unipolar"})
  
         materiais_dinamicos = []
         for bitola, vias in cabos.items():
-            if vias["Fase"] > 0:
-                materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase/Retorno)", "Qtd": f"{math.ceil(vias['Fase'])}m"})
-            if vias["Neutro"] > 0:
-                materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Neutro - Azul)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
-            if vias.get("Terra", 0) > 0:
-                materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Terra - Verde)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
+            if vias["Fase"]  > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase/Retorno)",  "Qtd": f"{math.ceil(vias['Fase'])}m"})
+            if vias["Neutro"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Neutro - Azul)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
+            if vias.get("Terra", 0) > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Terra - Verde)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
  
         contagem_disj = {}
         for c in novos_circuitos:
-            dj = c.get("Disjuntor")
+            dj   = c.get("Disjuntor")
             tipo = c.get("Tipo Disj.", "Unipolar")
             if dj:
                 nome_dj = f"Disjuntor DIN {tipo} {dj}"
                 contagem_disj[nome_dj] = contagem_disj.get(nome_dj, 0) + 1
- 
         for nome_dj, qtd in contagem_disj.items():
             materiais_dinamicos.append({"Item": nome_dj, "Qtd": f"{qtd} un"})
  
         total_circ = len(novos_circuitos)
-        tam_qdc = 12 if total_circ <= 6 else (16 if total_circ <= 12 else 24)
+        tam_qdc    = 12 if total_circ <= 6 else (16 if total_circ <= 12 else 24)
         materiais_dinamicos.append({"Item": f"Quadro de Distribuicao (QDC) - {tam_qdc} Polos", "Qtd": "1 un"})
  
-        st.session_state.dados_cargas = df_calc
-        st.session_state.lista_circuitos = novos_circuitos
+        st.session_state.dados_cargas     = df_calc
+        st.session_state.lista_circuitos  = novos_circuitos
         st.session_state.resumo_materiais = materiais_dinamicos
         st.success("✅ Cálculos e materiais gerados com sucesso!")
         st.rerun()
@@ -433,10 +439,8 @@ elif aba == "🏠 Cargas":
         st.divider()
         st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
         st.table(pd.DataFrame(st.session_state.lista_circuitos))
- 
         st.subheader("📦 Lista Estimada de Materiais")
         st.table(pd.DataFrame(st.session_state.resumo_materiais))
- 
         st.info("💡 Dica: Verifique sempre a bitola do cabo no 'Dimensionador' antes de fechar o pedido.")
  
         if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
@@ -444,26 +448,17 @@ elif aba == "🏠 Cargas":
                 pdf = FPDF()
                 pdf.add_page()
  
-                emp = st.session_state.get('nome_empresa', '')
-                reg = st.session_state.get('crt', '')
-                if not emp:
-                    emp = 'VoltSpec Pro'
-                if not reg:
-                    reg = 'Tecnico Responsavel'
+                # CABEÇALHO COM DADOS DO PERFIL
+                montar_cabecalho_pdf(pdf)
  
-                pdf.set_fill_color(30, 41, 59)
-                pdf.rect(0, 0, 210, 40, 'F')
-                pdf.set_text_color(255, 255, 255)
-                pdf.set_font("Arial", "B", 16)
-                pdf.cell(190, 10, limpar_texto(emp.upper()), ln=True, align="C")
-                pdf.set_font("Arial", "", 10)
-                pdf.cell(190, 6, limpar_texto(f"Registro: {reg} | Rede: {tensao_fase}V"), ln=True, align="C")
+                pdf.set_font("Arial", "I", 8)
+                pdf.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Rede: {tensao_fase}V", 0, 1, "R")
+                pdf.ln(3)
  
-                pdf.ln(25)
-                pdf.set_text_color(0, 0, 0)
+                # Seção 1: Cargas
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "1. MEMORIAL DE DIMENSIONAMENTO DE CARGAS", "B", 1, "L")
-                pdf.ln(5)
+                pdf.ln(3)
                 pdf.set_font("Arial", "B", 8)
                 pdf.set_fill_color(240, 240, 240)
                 h_c = ["Comodo", "Area", "Iluminacao", "TUGs", "Pot.TUG", "TUE"]
@@ -480,10 +475,11 @@ elif aba == "🏠 Cargas":
                     pdf.cell(35, 7, f"{r['Potencia TUG (VA)']}VA", 1, 0, "C")
                     pdf.cell(35, 7, f"{r['TUE (Watts)']}W", 1, 1, "C")
  
-                pdf.ln(10)
+                # Seção 2: QDC
+                pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "2. QUADRO DE DISTRIBUICAO (QDC)", "B", 1, "L")
-                pdf.ln(5)
+                pdf.ln(3)
                 pdf.set_font("Arial", "B", 8)
                 pdf.set_fill_color(240, 240, 240)
                 h_q = ["Circ.", "Descricao", "Potencia", "Tensao", "Cabo", "Disj.", "Tipo"]
@@ -501,10 +497,11 @@ elif aba == "🏠 Cargas":
                     pdf.cell(20, 7, limpar_texto(c["Disjuntor"]), 1, 0, "C")
                     pdf.cell(30, 7, limpar_texto(c.get("Tipo Disj.", "")), 1, 1, "C")
  
-                pdf.ln(10)
+                # Seção 3: Materiais
+                pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "3. MATERIAIS SUGERIDOS (ESTIMATIVA INFRAESTRUTURA)", "B", 1, "L")
-                pdf.ln(5)
+                pdf.ln(3)
                 pdf.set_font("Arial", "B", 8)
                 pdf.set_fill_color(240, 240, 240)
                 pdf.cell(140, 8, "Item e Especificacao", 1, 0, "C", True)
@@ -525,13 +522,13 @@ elif aba == "💰 Orçamentos":
     cliente = st.text_input("Nome do Cliente:", "Cliente Araxá")
     servicos = [
         {"Descricao": "Ponto de Tomada / Interruptor", "Qtd": 0, "Preco": 85.0},
-        {"Descricao": "Ponto de Iluminacao", "Qtd": 0, "Preco": 75.0},
-        {"Descricao": "Montagem de Quadro (ate 12 disj.)", "Qtd": 0, "Preco": 450.0},
-        {"Descricao": "Montagem de Quadro (acima 12 disj.)", "Qtd": 0, "Preco": 650.0},
-        {"Descricao": "Padrao CEMIG Monofasico", "Qtd": 0, "Preco": 850.0},
-        {"Descricao": "Padrao CEMIG Trifasico", "Qtd": 0, "Preco": 1350.0},
-        {"Descricao": "Instalacao de Chuveiro", "Qtd": 0, "Preco": 110.0},
-        {"Descricao": "Laudo de Conformidade", "Qtd": 0, "Preco": 350.0}
+        {"Descricao": "Ponto de Iluminacao",            "Qtd": 0, "Preco": 75.0},
+        {"Descricao": "Montagem de Quadro (ate 12 disj.)",    "Qtd": 0, "Preco": 450.0},
+        {"Descricao": "Montagem de Quadro (acima 12 disj.)",  "Qtd": 0, "Preco": 650.0},
+        {"Descricao": "Padrao CEMIG Monofasico",         "Qtd": 0, "Preco": 850.0},
+        {"Descricao": "Padrao CEMIG Trifasico",          "Qtd": 0, "Preco": 1350.0},
+        {"Descricao": "Instalacao de Chuveiro",          "Qtd": 0, "Preco": 110.0},
+        {"Descricao": "Laudo de Conformidade",           "Qtd": 0, "Preco": 350.0}
     ]
     df_serv = st.data_editor(pd.DataFrame(servicos), num_rows="dynamic", use_container_width=True, key="orc_edt")
  
@@ -548,17 +545,16 @@ elif aba == "📦 Materiais":
     materiais = [
         {"Descricao": "Cabo Flexivel 2,5mm (Rolo 100m)", "Qtd": 0, "Preco": 285.0},
         {"Descricao": "Cabo Flexivel 4,0mm (Rolo 100m)", "Qtd": 0, "Preco": 420.0},
-        {"Descricao": "Disjuntor DIN Mono (10A a 32A)", "Qtd": 0, "Preco": 19.90},
-        {"Descricao": "Dispositivo DR Bipolar 40A", "Qtd": 0, "Preco": 189.0},
-        {"Descricao": "Dispositivo DPS 20kA", "Qtd": 0, "Preco": 58.0},
-        {"Descricao": "Caixa de Passagem 4x2", "Qtd": 0, "Preco": 3.50},
-        {"Descricao": "Eletroduto Corrugado 3/4 (50m)", "Qtd": 0, "Preco": 75.0}
+        {"Descricao": "Disjuntor DIN Mono (10A a 32A)",  "Qtd": 0, "Preco": 19.90},
+        {"Descricao": "Dispositivo DR Bipolar 40A",       "Qtd": 0, "Preco": 189.0},
+        {"Descricao": "Dispositivo DPS 20kA",             "Qtd": 0, "Preco": 58.0},
+        {"Descricao": "Caixa de Passagem 4x2",            "Qtd": 0, "Preco": 3.50},
+        {"Descricao": "Eletroduto Corrugado 3/4 (50m)",   "Qtd": 0, "Preco": 75.0}
     ]
     df_mat = st.data_editor(pd.DataFrame(materiais), num_rows="dynamic", use_container_width=True, key="mat_edt")
  
     total_mat = (df_mat["Qtd"] * df_mat["Preco"]).sum()
     st.subheader(f"Total Materiais: R$ {total_mat:,.2f}")
- 
     st.info("💡 Dica: Verifique sempre a bitola do cabo no 'Dimensionador' antes de fechar o pedido.")
  
     if st.button("📄 Gerar PDF Materiais"):
@@ -571,32 +567,27 @@ elif aba == "📐 Dimensionador":
  
     col_inp1, col_inp2, col_inp3 = st.columns(3)
     with col_inp1:
-        pot = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
+        pot       = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
         tipo_carga = st.selectbox("Tipo de Carga:", ["Iluminação", "Tomadas (Geral/TUE)"])
     with col_inp2:
         tensao = st.selectbox("Tensão (V):", [127, 220])
-        dist = st.number_input("Distância do Quadro (m):", value=15.0, step=1.0)
+        dist   = st.number_input("Distância do Quadro (m):", value=15.0, step=1.0)
     with col_inp3:
         fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0,
                                 help="0.70 para 3 circuitos no mesmo conduíte")
  
-    ib = pot / tensao
+    ib           = pot / tensao
     ib_corrigida = ib / fator_agrup
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
  
-    if ib_corrigida <= 15.5:
-        bitola_sugerida = 1.5
-    elif ib_corrigida <= 21:
-        bitola_sugerida = 2.5
-    elif ib_corrigida <= 28:
-        bitola_sugerida = 4.0
-    elif ib_corrigida <= 36:
-        bitola_sugerida = 6.0
-    else:
-        bitola_sugerida = 10.0
+    if ib_corrigida <= 15.5:   bitola_sugerida = 1.5
+    elif ib_corrigida <= 21:   bitola_sugerida = 2.5
+    elif ib_corrigida <= 28:   bitola_sugerida = 4.0
+    elif ib_corrigida <= 36:   bitola_sugerida = 6.0
+    else:                      bitola_sugerida = 10.0
  
-    bitola_final = max(bitola_sugerida, bitola_minima)
-    queda_v = (2 * dist * ib * 0.0172) / bitola_final
+    bitola_final     = max(bitola_sugerida, bitola_minima)
+    queda_v          = (2 * dist * ib * 0.0172) / bitola_final
     percentual_queda = (queda_v / tensao) * 100
  
     st.divider()
@@ -612,9 +603,7 @@ elif aba == "📐 Dimensionador":
         st.metric("Bitola Final", f"{bitola_final} mm²")
  
     st.subheader("🛡️ Verificação de Conformidade")
-    erros = []
-    avisos = []
- 
+    erros, avisos = [], []
     if bitola_sugerida < bitola_minima:
         avisos.append(f"A norma exige mínimo de {bitola_minima}mm² para {tipo_carga.lower()}.")
     if percentual_queda > 4.0:
@@ -627,10 +616,8 @@ elif aba == "📐 Dimensionador":
     if not erros and not avisos:
         st.success("✅ Circuito em conformidade com a NBR 5410.")
     else:
-        for erro in erros:
-            st.error(f"❌ **CONFORMIDADE:** {erro}")
-        for aviso in avisos:
-            st.warning(f"⚠️ **OBSERVAÇÃO:** {aviso}")
+        for erro in erros:   st.error(f"❌ **CONFORMIDADE:** {erro}")
+        for aviso in avisos: st.warning(f"⚠️ **OBSERVAÇÃO:** {aviso}")
  
     with st.expander("📝 Detalhes do Dimensionamento"):
         st.write(f"""
@@ -644,16 +631,15 @@ elif aba == "📐 Dimensionador":
 elif aba == "🛒 Produtos":
     st.header("🛒 Vitrine de Ferramentas (Mercado Livre)")
     prods = [
-        {"nome": "Jogo Chaves Isoladas", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_701755-MLB85959666529_062025-F.webp", "link": "https://meli.la/2xLSiQJ"},
-        {"nome": "Alicate Decapador Vonder", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_608489-MLA99480826142_112025-F.webp", "link": "https://meli.la/2L47LTv"},
-        {"nome": "Bolsa Ferramentas Reforcada", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_947240-MLA99992405049_112025-F.webp", "link": "https://meli.la/1E4on12"},
-        {"nome": "Alicate Crimpar Prensa", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_928036-MLA99440131490_112025-F.webp", "link": "https://meli.la/247XSK7"},
-        {"nome": "Kit Eletrica Chave Teste Digital + Caneta Detectora", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_925244-MLA102644904043_122025-F.webp", "link": "https://meli.la/214x31Y"},
-        {"nome": "Alicate Universal Eletricista 8 Sata Isolado 1000V", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_718013-MLA96100316665_102025-F.webp", "link": "https://meli.la/14aG1bU"},
-        {"nome": "Cinto Pochete Porta Ferramentas Eletricista", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_993974-MLA96427705692_102025-F.webp", "link": "https://meli.la/1RKgafT"},
-        {"nome": "Cinturao Eletricista Bolsa Multifuncional", "img": "https://http2.mlstatic.com/D_NQ_NP_2X_798036-MLB106606586781_022026-F.webp", "link": "https://meli.la/1JcRtAG"},
+        {"nome": "Jogo Chaves Isoladas",                     "img": "https://http2.mlstatic.com/D_NQ_NP_2X_701755-MLB85959666529_062025-F.webp",  "link": "https://meli.la/2xLSiQJ"},
+        {"nome": "Alicate Decapador Vonder",                 "img": "https://http2.mlstatic.com/D_NQ_NP_2X_608489-MLA99480826142_112025-F.webp",  "link": "https://meli.la/2L47LTv"},
+        {"nome": "Bolsa Ferramentas Reforcada",              "img": "https://http2.mlstatic.com/D_NQ_NP_2X_947240-MLA99992405049_112025-F.webp",  "link": "https://meli.la/1E4on12"},
+        {"nome": "Alicate Crimpar Prensa",                   "img": "https://http2.mlstatic.com/D_NQ_NP_2X_928036-MLA99440131490_112025-F.webp",  "link": "https://meli.la/247XSK7"},
+        {"nome": "Kit Eletrica Chave Teste + Caneta",        "img": "https://http2.mlstatic.com/D_NQ_NP_2X_925244-MLA102644904043_122025-F.webp", "link": "https://meli.la/214x31Y"},
+        {"nome": "Alicate Universal Eletricista 1000V",      "img": "https://http2.mlstatic.com/D_NQ_NP_2X_718013-MLA96100316665_102025-F.webp",  "link": "https://meli.la/14aG1bU"},
+        {"nome": "Cinto Pochete Porta Ferramentas",          "img": "https://http2.mlstatic.com/D_NQ_NP_2X_993974-MLA96427705692_102025-F.webp",  "link": "https://meli.la/1RKgafT"},
+        {"nome": "Cinturao Eletricista Multifuncional",      "img": "https://http2.mlstatic.com/D_NQ_NP_2X_798036-MLB106606586781_022026-F.webp", "link": "https://meli.la/1JcRtAG"},
     ]
- 
     cols = st.columns(4)
     for i, p in enumerate(prods):
         with cols[i % 4]:
