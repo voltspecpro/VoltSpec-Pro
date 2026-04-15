@@ -522,15 +522,13 @@ elif aba == "🏠 Cargas":
             except Exception as e:
                 st.error(f"Erro no PDF: {e}")
 
-
-
 # --- MÓDULO Luminotecnica  ---
-    elif  aba == "💡 Luminotecnica":
+elif  aba == "💡 Luminotecnica":
             st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
             st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
 
-    # --- 1. ENTRADA DE DADOS DO AMBIENTE ---
-    with st.expander("🏠 Dados do Ambiente", expanded=True):
+# --- 1. ENTRADA DE DADOS DO AMBIENTE ---
+with st.expander("🏠 Dados do Ambiente", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
             comprimento = st.number_input("Comprimento (m):", min_value=0.1, value=5.0)
@@ -547,7 +545,7 @@ elif aba == "🏠 Cargas":
         st.write(f"**Área Total:** {area:.2f} m² | **Altura Útil (h):** {h:.2f} m")
 
     # --- 2. NORMAS E REFLECTÂNCIA ---
-    with st.expander("📚 Parâmetros Normativos"):
+with st.expander("📚 Parâmetros Normativos"):
         col1, col2 = st.columns(2)
         with col1:
             # Tabela simplificada de iluminância (Lux)
@@ -570,7 +568,7 @@ elif aba == "🏠 Cargas":
             fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo")
 
     # --- 3. DADOS DA LUMINÁRIA ---
-    with st.expander("🔦 Especificações da Lâmpada/Luminária"):
+with st.expander("🔦 Especificações da Lâmpada/Luminária"):
         c1, c2 = st.columns(2)
         with c1:
             fluxo_unitario = st.number_input("Fluxo Luminoso por Luminária (Lúmens):", min_value=1, value=2500, help="Ver no catálogo do fabricante (ex: Painel LED 30W)")
@@ -579,34 +577,34 @@ elif aba == "🏠 Cargas":
 
     # --- 4. CÁLCULOS FINAIS ---
     # Fórmula: N = (Lux * Area) / (Fluxo * Fu * Fm)
-    fluxo_total_necessario = (nivel_iluminancia * area) / (fator_utilizacao * fator_perdas)
-    quantidade_n = fluxo_total_necessario / fluxo_unitario
-    quantidade_final = int(-(-quantidade_n // 1))  # Arredonda para cima
+fluxo_total_necessario = (nivel_iluminancia * area) / (fator_utilizacao * fator_perdas)
+quantidade_n = fluxo_total_necessario / fluxo_unitario
+quantidade_final = int(-(-quantidade_n // 1))  # Arredonda para cima
     
-    potencia_total = quantidade_final * potencia_unit
-    densidade_potencia = potencia_total / area
+potencia_total = quantidade_final * potencia_unit
+densidade_potencia = potencia_total / area
 
     # --- 5. RESULTADOS ---
-    st.subheader("📊 Resultado do Dimensionamento")
-    res1, res2, res3 = st.columns(3)
-    res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
-    res2.metric("Potência Total", f"{potencia_total} W")
-    res3.metric("W/m²", f"{densidade_potencia:.2f}")
+st.subheader("📊 Resultado do Dimensionamento")
+res1, res2, res3 = st.columns(3)
+res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
+res2.metric("Potência Total", f"{potencia_total} W")
+res3.metric("W/m²", f"{densidade_potencia:.2f}")
 
     # Layout Sugerido (Distribuição)
-    st.write("---")
-    st.subheader("📐 Sugestão de Distribuição")
+st.write("---")
+st.subheader("📐 Sugestão de Distribuição")
     # Cálculo simples de colunas e linhas
-    import math
-    proporcao = comprimento / largura
-    colunas = math.sqrt(quantidade_final * proporcao)
-    linhas = quantidade_final / colunas
+import math
+proporcao = comprimento / largura
+colunas = math.sqrt(quantidade_final * proporcao)
+linhas = quantidade_final / colunas
     
-    st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
-    st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
+st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
+st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
 
     # Botão para salvar dados no State (para o PDF)
-    if st.button("✅ Confirmar Dados para o Relatório"):
+if st.button("✅ Confirmar Dados para o Relatório"):
         st.session_state.dados_lumino = {
             "nivel_lux": nivel_iluminancia,
             "qtd_luminarias": quantidade_final,
