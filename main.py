@@ -149,6 +149,39 @@ def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
     pdf.cell(0, 10, f"TOTAL: R$ {total:.2f}", 0, 1, "R")
  
     return pdf.output(dest="S").encode("latin-1")
+def gerar_pdf_resultado_lumino(dados, perfil):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    
+    # Cabeçalho usando os dados do seu perfil (se existirem)
+    empresa = perfil.get('nome_empresa', 'VoltSpec Pro')
+    pdf.cell(190, 10, f"{empresa} - Relatório Luminotécnico", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 10, f"Responsável Técnico: {perfil.get('crt', '---')}", ln=True)
+    pdf.cell(190, 10, f"Local/Cidade: {perfil.get('endereco', '---')}", ln=True)
+    pdf.ln(5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(10)
+
+    # Dados do Projeto
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(190, 10, "Detalhes do Dimensionamento", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 10, f"- Nível de Iluminância Requerido: {dados['nivel_lux']} Lux", ln=True)
+    pdf.cell(190, 10, f"- Área do Ambiente: {dados['area']:.2f} m²", ln=True)
+    pdf.cell(190, 10, f"- Quantidade de Luminárias: {dados['qtd_luminarias']} unidades", ln=True)
+    pdf.cell(190, 10, f"- Potência Total Instalada: {dados['potencia_total']} W", ln=True)
+    pdf.cell(190, 10, f"- Distribuição Sugerida: {dados['distribuicao']}", ln=True)
+    
+    pdf.ln(20)
+    pdf.set_font("Arial", "I", 10)
+    pdf.multi_cell(190, 10, "Cálculo realizado seguindo os parâmetros da NBR ISO/CIE 8995-1 utilizando o Método dos Lúmens.")
+    
+    # Retorna o PDF como bytes
+    return pdf.output(dest='S').encode('latin-1')
  
 # --- 4. FUNÇÕES DE BANCO DE DADOS ---
 
