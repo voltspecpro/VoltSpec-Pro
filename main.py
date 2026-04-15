@@ -523,7 +523,7 @@ elif aba == "🏠 Cargas":
                 st.error(f"Erro no PDF: {e}")
 
 # --- MÓDULO Luminotecnica  ---
-elif  aba == "💡 Luminotecnica":
+if  aba == "💡 Luminotecnica":
             st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
             st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
 
