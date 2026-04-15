@@ -66,16 +66,14 @@ def limpar_texto(txt):
     return str(txt).encode('latin-1', 'ignore').decode('latin-1').replace("²", "2").strip()
  
 def montar_cabecalho_pdf(pdf):
-    """
-    Monta cabeçalho padronizado com dados do perfil do técnico.
-    Usado em todos os PDFs do sistema.
-    """
-    emp      = limpar_texto(st.session_state.get('nome_empresa', '')) or 'VoltSpec Pro'
-    crt      = limpar_texto(st.session_state.get('crt', ''))
-    tel      = limpar_texto(st.session_state.get('telefone', ''))
-    cnpj     = limpar_texto(st.session_state.get('cnpj', ''))
-    cidade   = limpar_texto(st.session_state.get('endereco', ''))
-    email    = limpar_texto(st.session_state.get('email_contato', ''))
+    p = st.session_state.get('perfil', {})
+    
+    emp      = limpar_texto(p.get('nome_empresa', '')) or 'VoltSpec Pro'
+    crt      = limpar_texto(p.get('crt', ''))
+    tel      = limpar_texto(p.get('telefone', ''))
+    cnpj     = limpar_texto(p.get('cnpj', ''))
+    cidade   = limpar_texto(p.get('endereco', ''))
+    email    = limpar_texto(p.get('email_contato', ''))
  
     # Fundo escuro
     pdf.set_fill_color(30, 41, 59)
@@ -149,46 +147,40 @@ def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
     return pdf.output(dest="S").encode("latin-1")
  
 # --- 4. FUNÇÕES DE BANCO DE DADOS ---
- 
+
 def carregar_perfil_supabase():
-    if supabase is None:
-        return
-    if 'user' not in st.session_state or not st.session_state.user:
-        return
+    # ... (mantenha a verificação inicial)
     try:
         cliente = get_supabase_autenticado()
         res = cliente.table("profiles").select("*").eq("id", st.session_state.user.id).execute()
         if res.data:
             d = res.data[0]
-            st.session_state['nome_empresa']  = d.get('nome_empresa', '')
-            st.session_state['crt']           = d.get('crt', '')
-            st.session_state['telefone']      = d.get('telefone', '')
-            st.session_state['cnpj']          = d.get('cnpj', '')
-            st.session_state['endereco']      = d.get('endereco_comercial', '')
-            st.session_state['email_contato'] = d.get('email', '')
+            st.session_state.perfil['nome_empresa']  = d.get('nome_empresa', '')
+            st.session_state.perfil['crt']           = d.get('crt', '')
+            st.session_state.perfil['telefone']      = d.get('telefone', '')
+            st.session_state.perfil['cnpj']          = d.get('cnpj', '')
+            st.session_state.perfil['endereco']      = d.get('endereco_comercial', '')
+            st.session_state.perfil['email_contato'] = d.get('email', '')
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
- 
+
 def salvar_perfil_supabase():
-    if supabase is None:
-        st.error("❌ Sem conexão com o banco.")
-        return
+    # ... (mantenha a verificação inicial)
     try:
         cliente = get_supabase_autenticado()
         dados = {
-            "id":                st.session_state.user.id,
-            "nome_empresa":      st.session_state.get('nome_empresa', ''),
-            "crt":               st.session_state.get('crt', ''),
-            "telefone":          st.session_state.get('telefone', ''),
-            "cnpj":              st.session_state.get('cnpj', ''),
-            "email":             st.session_state.user.email,
-            "endereco_comercial":st.session_state.get('endereco', '')
+            "id":                 st.session_state.user.id,
+            "nome_empresa":       st.session_state.perfil.get('nome_empresa', ''),
+            "crt":                st.session_state.perfil.get('crt', ''),
+            "telefone":           st.session_state.perfil.get('telefone', ''),
+            "cnpj":               st.session_state.perfil.get('cnpj', ''),
+            "email":              st.session_state.user.email,
+            "endereco_comercial": st.session_state.perfil.get('endereco', '')
         }
         cliente.table("profiles").upsert(dados).execute()
         st.success("✅ Sincronizado!")
     except Exception as e:
         st.error(f"Erro ao salvar: {e}")
- 
 # --- 5. ESTADO INICIAL ---
 if 'logado' not in st.session_state:
     st.session_state.logado = False
@@ -211,11 +203,21 @@ if 'lista_circuitos' not in st.session_state:
 if 'resumo_materiais' not in st.session_state:
     st.session_state.resumo_materiais = []
  
-chaves_perfil = ['nome_empresa', 'crt', 'telefone', 'cnpj', 'endereco', 'email_contato']
-for chave in chaves_perfil:
-    if chave not in st.session_state:
-        st.session_state[chave] = ''
- 
+if 'perfil' not in st.session_state:
+    st.session_state.perfil = {
+        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''
+    }
+ # LÁ EMBAIXO NO BOTÃO DE SAIR:
+if st.sidebar.button("Sair"):
+    st.session_state.logado = False
+    st.session_state.user   = None
+    st.session_state.session = None
+    st.session_state.perfil_carregado = False
+    st.session_state.perfil = {
+        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''
+    }
+    st.rerun()
+
 # --- 6. TELA DE LOGIN ---
 if not st.session_state.logado:
     st.title("⚡ VoltSpec Pro")
@@ -263,8 +265,7 @@ if st.sidebar.button("Sair"):
     st.session_state.user   = None
     st.session_state.session = None
     st.session_state.perfil_carregado = False
-    for chave in chaves_perfil:
-        st.session_state[chave] = ''
+
     st.rerun()
  
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
@@ -274,17 +275,16 @@ if aba == "⚙️ Perfil":
     st.header("⚙️ Configurações do Técnico")
     c1, c2 = st.columns(2)
     with c1:
-        st.text_input("Empresa:", key="nome_empresa")
-        st.text_input("CRT/CFT:", key="crt")
-        st.text_input("WhatsApp:", key="telefone")
+        st.session_state.perfil['nome_empresa'] = st.text_input("Empresa:", value=st.session_state.perfil.get('nome_empresa', ''))
+        st.session_state.perfil['crt']          = st.text_input("CRT/CFT:", value=st.session_state.perfil.get('crt', ''))
+        st.session_state.perfil['telefone']     = st.text_input("WhatsApp:", value=st.session_state.perfil.get('telefone', ''))
     with c2:
-        st.text_input("CNPJ:", key="cnpj")
-        st.text_input("E-mail Profissional:", key="email_contato")
-        st.text_input("Cidade/UF:", key="endereco", placeholder="Ex: Araxá - MG")
- 
+        st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
+        st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
+        st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
+
     if st.button("💾 Salvar na Nuvem"):
         salvar_perfil_supabase()
- 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
     st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
