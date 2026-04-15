@@ -260,12 +260,16 @@ if st.session_state.logado and not st.session_state.perfil_carregado:
  
 # --- 7. SISTEMA PRINCIPAL ---
 st.sidebar.title("VoltSpec Pro ⚡")
-if st.sidebar.button("Sair"):
+if st.sidebar.button("Sair", key="btn_sair_logoff"): # Adicionei a key aqui
     st.session_state.logado = False
     st.session_state.user   = None
     st.session_state.session = None
     st.session_state.perfil_carregado = False
-
+    # Reinicia o dicionário de perfil para não sobrar rastro de dados
+    st.session_state.perfil = {
+        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 
+        'endereco': '', 'email_contato': ''
+    }
     st.rerun()
  
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
