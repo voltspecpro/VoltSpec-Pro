@@ -6,6 +6,8 @@ from fpdf import FPDF
 from supabase import create_client, Client
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import io
  
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -601,16 +603,28 @@ elif aba == "💡 Luminotecnica":
     st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
     st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
 
-    # Botão para salvar dados no State (para o PDF)
-    if st.button("✅ Confirmar Dados para o Relatório", key="btn_confirmar_lum"):
-        st.session_state.dados_lumino = {
-            "nivel_lux": nivel_iluminancia,
-            "qtd_luminarias": quantidade_final,
-            "potencia_total": potencia_total,
-            "area": area_total
-        }
-        st.success("Dados prontos para o PDF!")
- 
+   # Criamos os dados para passar para o PDF
+    dados_atuais = {
+        "nivel_lux": nivel_iluminancia,
+        "qtd_luminarias": quantidade_final,
+        "potencia_total": potencia_total,
+        "area": area_total,
+        "distribuicao": f"{round(colunas)}x{round(linhas)}"
+    }
+
+    # O botão de download precisa gerar o conteúdo na hora
+    try:
+        pdf_bytes = "gerar_pdf_resultado_lumino" (dados_atuais, st.session_state.get('perfil', {}))
+        
+        st.download_button(
+            label="📥 Gerar e Baixar Relatório (PDF)",
+            data=pdf_bytes,
+            file_name=f"Luminotecnico_{st.session_state.perfil.get('nome_empresa', 'VoltSpec')}.pdf",
+            mime="application/pdf",
+            key="btn_download_lumino"
+        )
+    except Exception as e:
+        st.error(f"Erro ao preparar o PDF: {e}")
 # --- MÓDULO ORÇAMENTOS ---
 elif aba == "💰 Orçamentos":
     st.header("💰 Orçamentos de Serviços")
