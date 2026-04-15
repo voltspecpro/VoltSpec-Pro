@@ -523,32 +523,32 @@ elif aba == "🏠 Cargas":
                 st.error(f"Erro no PDF: {e}")
 
 # --- MÓDULO Luminotecnica  ---
-if  aba == "💡 Luminotecnica":
-            st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
-            st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
+elif aba == "💡 Luminotecnica":
+    st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
+    st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
 
-# --- 1. ENTRADA DE DADOS DO AMBIENTE ---
-with st.expander("🏠 Dados do Ambiente", expanded=True):
+    # --- 1. ENTRADA DE DADOS DO AMBIENTE ---
+    # Note que agora tudo abaixo tem 4 espaços de recuo para estar DENTRO do elif
+    with st.expander("🏠 Dados do Ambiente", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            comprimento = st.number_input("Comprimento (m):", min_value=0.1, value=5.0)
-            largura = st.number_input("Largura (m):", min_value=0.1, value=4.0)
+            comprimento = st.number_input("Comprimento (m):", min_value=0.1, value=5.0, key="lum_comp")
+            largura = st.number_input("Largura (m):", min_value=0.1, value=4.0, key="lum_larg")
         with c2:
-            h_total = st.number_input("Pé direito total (m):", min_value=0.1, value=3.0)
-            h_trabalho = st.number_input("Altura do plano de trabalho (m):", min_value=0.0, value=0.75, help="Mesa: 0.75m | Chão: 0.0m")
+            h_total = st.number_input("Pé direito total (m):", min_value=0.1, value=3.0, key="lum_h_total")
+            h_trabalho = st.number_input("Altura do plano de trabalho (m):", min_value=0.0, value=0.75, help="Mesa: 0.75m | Chão: 0.0m", key="lum_h_trab")
         with c3:
-            h_luminaria = st.number_input("Altura da luminária ao teto (m):", min_value=0.0, value=0.0, help="Embutida: 0.0m")
+            h_luminaria = st.number_input("Altura da luminária ao teto (m):", min_value=0.0, value=0.0, help="Embutida: 0.0m", key="lum_h_lum")
         
         # Cálculo da altura útil (h)
-        h = h_total - h_trabalho - h_luminaria
-        area = comprimento * largura
-        st.write(f"**Área Total:** {area:.2f} m² | **Altura Útil (h):** {h:.2f} m")
+        h_util = h_total - h_trabalho - h_luminaria
+        area_total = comprimento * largura
+        st.write(f"**Área Total:** {area_total:.2f} m² | **Altura Útil (h):** {h_util:.2f} m")
 
     # --- 2. NORMAS E REFLECTÂNCIA ---
-with st.expander("📚 Parâmetros Normativos"):
+    with st.expander("📚 Parâmetros Normativos"):
         col1, col2 = st.columns(2)
         with col1:
-            # Tabela simplificada de iluminância (Lux)
             lux_sugerido = st.selectbox("Tipo de Ambiente (Lux):", [
                 "Escritório / Sala de Estudo (500 lux)",
                 "Cozinha / Banheiro (300 lux)",
@@ -556,60 +556,58 @@ with st.expander("📚 Parâmetros Normativos"):
                 "Corredor / Depósito (100 lux)",
                 "Oficina / Indústria (750 lux)",
                 "Personalizado"
-            ])
+            ], key="lum_lux_select")
             
             if lux_sugerido == "Personalizado":
-                nivel_iluminancia = st.number_input("Nível de Iluminância desejado (Lux):", value=500)
+                nivel_iluminancia = st.number_input("Nível de Iluminância desejado (Lux):", value=500, key="lum_lux_custom")
             else:
                 nivel_iluminancia = int(lux_sugerido.split('(')[1].split(' ')[0])
 
         with col2:
-            fator_utilizacao = st.slider("Fator de Utilização (η):", 0.1, 1.0, 0.5, help="Depende da luminária e cores das paredes.")
-            fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo")
+            fator_utilizacao = st.slider("Fator de Utilização (η):", 0.1, 1.0, 0.5, help="Depende da luminária e cores das paredes.", key="lum_fu")
+            fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo", key="lum_fm")
 
     # --- 3. DADOS DA LUMINÁRIA ---
-with st.expander("🔦 Especificações da Lâmpada/Luminária"):
+    with st.expander("🔦 Especificações da Lâmpada/Luminária"):
         c1, c2 = st.columns(2)
         with c1:
-            fluxo_unitario = st.number_input("Fluxo Luminoso por Luminária (Lúmens):", min_value=1, value=2500, help="Ver no catálogo do fabricante (ex: Painel LED 30W)")
+            fluxo_unitario = st.number_input("Fluxo Luminoso por Luminária (Lúmens):", min_value=1, value=2500, help="Ver no catálogo do fabricante", key="lum_fluxo_u")
         with c2:
-            potencia_unit = st.number_input("Potência por Luminária (W):", min_value=1, value=24)
+            potencia_unit = st.number_input("Potência por Luminária (W):", min_value=1, value=24, key="lum_pot_u")
 
     # --- 4. CÁLCULOS FINAIS ---
-    # Fórmula: N = (Lux * Area) / (Fluxo * Fu * Fm)
-fluxo_total_necessario = (nivel_iluminancia * area) / (fator_utilizacao * fator_perdas)
-quantidade_n = fluxo_total_necessario / fluxo_unitario
-quantidade_final = int(-(-quantidade_n // 1))  # Arredonda para cima
+    fluxo_total_necessario = (nivel_iluminancia * area_total) / (fator_utilizacao * fator_perdas)
+    quantidade_n = fluxo_total_necessario / fluxo_unitario
+    quantidade_final = int(-(-quantidade_n // 1))  # Arredonda para cima
     
-potencia_total = quantidade_final * potencia_unit
-densidade_potencia = potencia_total / area
+    potencia_total = quantidade_final * potencia_unit
+    densidade_potencia = potencia_total / area_total
 
     # --- 5. RESULTADOS ---
-st.subheader("📊 Resultado do Dimensionamento")
-res1, res2, res3 = st.columns(3)
-res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
-res2.metric("Potência Total", f"{potencia_total} W")
-res3.metric("W/m²", f"{densidade_potencia:.2f}")
+    st.subheader("📊 Resultado do Dimensionamento")
+    res1, res2, res3 = st.columns(3)
+    res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
+    res2.metric("Potência Total", f"{potencia_total} W")
+    res3.metric("W/m²", f"{densidade_potencia:.2f}")
 
     # Layout Sugerido (Distribuição)
-st.write("---")
-st.subheader("📐 Sugestão de Distribuição")
-    # Cálculo simples de colunas e linhas
-import math
-proporcao = comprimento / largura
-colunas = math.sqrt(quantidade_final * proporcao)
-linhas = quantidade_final / colunas
+    st.write("---")
+    st.subheader("📐 Sugestão de Distribuição")
+    import math
+    proporcao = comprimento / largura
+    colunas = math.sqrt(quantidade_final * proporcao)
+    linhas = quantidade_final / colunas
     
-st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
-st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
+    st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
+    st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
 
     # Botão para salvar dados no State (para o PDF)
-if st.button("✅ Confirmar Dados para o Relatório"):
+    if st.button("✅ Confirmar Dados para o Relatório", key="btn_confirmar_lum"):
         st.session_state.dados_lumino = {
             "nivel_lux": nivel_iluminancia,
             "qtd_luminarias": quantidade_final,
             "potencia_total": potencia_total,
-            "area": area
+            "area": area_total
         }
         st.success("Dados prontos para o PDF!")
  
