@@ -346,7 +346,10 @@ if not tem_acesso:
 if status_ass != 'ativo':
     dias_restantes = max(0, 7 - dias_de_uso)
     st.sidebar.info(f"⏳ **Período de Teste:** Restam {dias_restantes} dias.")
-    st.sidebar.link_button("💎 Fazer Upgrade Agora", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5")
+    with st.sidebar.expander("💎 Fazer Upgrade Agora", expanded=True):
+        st.link_button("Assinar Mensal", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", use_container_width=True)
+        st.link_button("Assinar Trimestral", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", type="primary", use_container_width=True)
+        st.link_button("Assinar Anual", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5", use_container_width=True)
 
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
