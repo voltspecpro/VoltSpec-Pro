@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from fpdf import FPDF
 from supabase import create_client, Client
 import io
@@ -76,17 +76,14 @@ def montar_cabecalho_pdf(pdf):
     cidade   = limpar_texto(p.get('endereco', ''))
     email    = limpar_texto(p.get('email_contato', ''))
 
-    # Fundo escuro
     pdf.set_fill_color(30, 41, 59)
     pdf.rect(0, 0, 210, 50, 'F')
     pdf.set_text_color(255, 255, 255)
 
-    # Nome da empresa (grande)
     pdf.set_font("Arial", "B", 16)
     pdf.set_xy(0, 6)
     pdf.cell(210, 10, emp.upper(), align="C", ln=True)
 
-    # Linha 1: CRT e Telefone
     linha1 = ""
     if crt:  linha1 += f"Reg.: {crt}"
     if tel:  linha1 += f"  |  Tel: {tel}"
@@ -94,7 +91,6 @@ def montar_cabecalho_pdf(pdf):
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha1.strip(), align="C", ln=True)
 
-    # Linha 2: CNPJ e Cidade
     linha2 = ""
     if cnpj:   linha2 += f"CNPJ: {cnpj}"
     if cidade: linha2 += f"  |  {cidade}"
@@ -102,20 +98,16 @@ def montar_cabecalho_pdf(pdf):
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha2.strip(), align="C", ln=True)
 
-    # Linha 3: E-mail
     if email:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, email, align="C", ln=True)
 
-    # Volta cor de texto para preto
     pdf.set_text_color(0, 0, 0)
     pdf.ln(8)
 
 def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
-    """Gera PDF para Orçamentos ou Materiais — com cabeçalho do perfil"""
     pdf = FPDF()
     pdf.add_page()
-
     montar_cabecalho_pdf(pdf)
 
     pdf.set_font("Arial", "B", 12)
@@ -144,7 +136,6 @@ def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
     pdf.ln(5)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"TOTAL: R$ {total:.2f}", 0, 1, "R")
-
     return pdf.output(dest="S").encode("latin-1")
 
 def gerar_pdf_resultado_lumino(dados, perfil):
@@ -152,7 +143,6 @@ def gerar_pdf_resultado_lumino(dados, perfil):
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     
-    # Cabeçalho usando os dados do seu perfil (se existirem)
     empresa = perfil.get('nome_empresa', 'VoltSpec Pro')
     pdf.cell(190, 10, f"{empresa} - Relatório Luminotécnico", ln=True, align='C')
     pdf.ln(10)
@@ -164,7 +154,6 @@ def gerar_pdf_resultado_lumino(dados, perfil):
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(10)
 
-    # Dados do Projeto
     pdf.set_font("Arial", "B", 14)
     pdf.cell(190, 10, "Detalhes do Dimensionamento", ln=True)
     pdf.set_font("Arial", "", 12)
@@ -178,7 +167,6 @@ def gerar_pdf_resultado_lumino(dados, perfil):
     pdf.set_font("Arial", "I", 10)
     pdf.multi_cell(190, 10, "Cálculo realizado seguindo os parâmetros da NBR ISO/CIE 8995-1 utilizando o Método dos Lúmens.")
     
-    # Retorna o PDF como bytes
     return pdf.output(dest='S').encode('latin-1')
 
 # --- 4. FUNÇÕES DE BANCO DE DADOS ---
@@ -195,6 +183,10 @@ def carregar_perfil_supabase():
             st.session_state.perfil['cnpj']          = d.get('cnpj', '')
             st.session_state.perfil['endereco']      = d.get('endereco_comercial', '')
             st.session_state.perfil['email_contato'] = d.get('email', '')
+            
+            # Novos campos para gestão do SaaS
+            st.session_state.perfil['data_cadastro']     = d.get('created_at', str(datetime.now(timezone.utc)))
+            st.session_state.perfil['status_assinatura'] = d.get('status_assinatura', 'trial')
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
 
@@ -209,6 +201,8 @@ def salvar_perfil_supabase():
             "cnpj":               st.session_state.perfil.get('cnpj', ''),
             "email":              st.session_state.user.email,
             "endereco_comercial": st.session_state.perfil.get('endereco', '')
+            # Nota: Não salvamos 'status_assinatura' aqui para o usuário não conseguir burlar alterando o próprio perfil.
+            # O status_assinatura deve ser atualizado pelo Webhook do Mercado Pago/Stripe.
         }
         cliente.table("profiles").upsert(dados).execute()
         st.success("✅ Sincronizado!")
@@ -239,7 +233,9 @@ if 'resumo_materiais' not in st.session_state:
 
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {
-        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''
+        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
+        'data_cadastro': str(datetime.now(timezone.utc)),
+        'status_assinatura': 'trial'
     }
 
 # --- 6. TELA DE LOGIN ---
@@ -271,30 +267,86 @@ if not st.session_state.logado:
                 st.error("❌ Sem conexão com o banco de dados.")
             else:
                 try:
+                    # Ao cadastrar, cria a conta. O trigger no Supabase deve criar a linha em 'profiles'
                     supabase.auth.sign_up({"email": nem, "password": npw})
-                    st.success("Sucesso! Verifique seu e-mail.")
+                    st.success("Sucesso! Verifique seu e-mail para confirmar a conta.")
                 except Exception as e:
                     st.error(f"Erro no cadastro: {e}")
     st.stop()
 
-# --- CARREGA PERFIL APÓS LOGIN (uma única vez por sessão) ---
+# --- CARREGA PERFIL APÓS LOGIN ---
 if st.session_state.logado and not st.session_state.perfil_carregado:
     carregar_perfil_supabase()
     st.session_state.perfil_carregado = True
 
-# --- 7. SISTEMA PRINCIPAL ---
+# --- 7. SISTEMA PRINCIPAL E LÓGICA DE PAYWALL ---
 st.sidebar.title("VoltSpec Pro ⚡")
-if st.sidebar.button("Sair", key="btn_sair_logoff"):
+
+# Calcula os dias de teste baseados no pandas datetime para evitar erros de fuso horário
+data_cad_str = st.session_state.perfil.get('data_cadastro')
+data_cad = pd.to_datetime(data_cad_str, errors='coerce', utc=True)
+if pd.isna(data_cad):
+    data_cad = pd.Timestamp.now(tz='UTC')
+
+dias_de_uso = (pd.Timestamp.now(tz='UTC') - data_cad).days
+status_ass = st.session_state.perfil.get('status_assinatura', 'trial')
+
+# Verifica se tem acesso
+tem_acesso = (dias_de_uso <= 7) or (status_ass == 'ativo')
+
+if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
     st.session_state.logado = False
     st.session_state.user   = None
     st.session_state.session = None
     st.session_state.perfil_carregado = False
-    # Reinicia o dicionário de perfil para não sobrar rastro de dados
     st.session_state.perfil = {
-        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 
-        'endereco': '', 'email_contato': ''
+        'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
+        'data_cadastro': str(datetime.now(timezone.utc)), 'status_assinatura': 'trial'
     }
     st.rerun()
+
+# ----------------------------------------------------
+# SE NÃO TIVER ACESSO (PAYWALL)
+# ----------------------------------------------------
+if not tem_acesso:
+    st.error("🔒 Seu período de teste expirou!")
+    st.title("Assine o VoltSpec Pro")
+    st.write("Seus 7 dias gratuitos chegaram ao fim. Para continuar gerando relatórios em PDF, calculando cargas e orçamentos, ative sua assinatura.")
+    
+    st.markdown("### 💎 Plano Profissional")
+    st.write("- Dimensionamento NBR 5410 ilimitado")
+    st.write("- Relatórios Luminotécnicos")
+    st.write("- Geração de PDF com sua Logo/Empresa")
+    
+    # ⚠️ COLE SEUS 3 LINKS AQUI 👇
+    link_mensal = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5"
+    link_trimestral = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b"
+    link_anual = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5"
+
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.info("🥉 **Plano Mensal**\n\nAcesso completo mês a mês sem fidelidade.")
+        st.link_button("💳 Assinar Mensal", link_mensal, use_container_width=True)
+        
+    with col2:
+        st.success("🥈 **Plano Trimestral**\n\nIdeal para projetos de médio prazo. Mais econômico.")
+        st.link_button("💳 Assinar Trimestral", link_trimestral, type="primary", use_container_width=True)
+        
+    with col3:
+        st.warning("🥇 **Plano Anual**\n\nMaior desconto. Tranquilidade para o ano todo!")
+        st.link_button("💳 Assinar Anual", link_anual, use_container_width=True)
+    
+    st.write("---")
+    st.caption("Após o pagamento, o sistema será liberado automaticamente (pode levar alguns minutos para o banco confirmar).")
+    st.stop() # Bloqueia o carregamento do resto do site!
+# ----------------------------------------------------
+# SE TIVER ACESSO (SISTEMA NORMAL)
+# ----------------------------------------------------
+if status_ass != 'ativo':
+    dias_restantes = max(0, 7 - dias_de_uso)
+    st.sidebar.info(f"⏳ **Período de Teste:** Restam {dias_restantes} dias.")
+    st.sidebar.link_button("💎 Fazer Upgrade Agora", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5")
 
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
@@ -476,15 +528,12 @@ elif aba == "🏠 Cargas":
             try:
                 pdf = FPDF()
                 pdf.add_page()
-
-                # CABEÇALHO COM DADOS DO PERFIL
                 montar_cabecalho_pdf(pdf)
 
                 pdf.set_font("Arial", "I", 8)
                 pdf.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Rede: {tensao_fase}V", 0, 1, "R")
                 pdf.ln(3)
 
-                # Seção 1: Cargas
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "1. MEMORIAL DE DIMENSIONAMENTO DE CARGAS", "B", 1, "L")
                 pdf.ln(3)
@@ -504,7 +553,6 @@ elif aba == "🏠 Cargas":
                     pdf.cell(35, 7, f"{r['Potencia TUG (VA)']}VA", 1, 0, "C")
                     pdf.cell(35, 7, f"{r['TUE (Watts)']}W", 1, 1, "C")
 
-                # Seção 2: QDC
                 pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "2. QUADRO DE DISTRIBUICAO (QDC)", "B", 1, "L")
@@ -526,7 +574,6 @@ elif aba == "🏠 Cargas":
                     pdf.cell(20, 7, limpar_texto(c["Disjuntor"]), 1, 0, "C")
                     pdf.cell(30, 7, limpar_texto(c.get("Tipo Disj.", "")), 1, 1, "C")
 
-                # Seção 3: Materiais
                 pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "3. MATERIAIS SUGERIDOS (ESTIMATIVA INFRAESTRUTURA)", "B", 1, "L")
@@ -550,7 +597,6 @@ elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
     st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
 
-    # --- 1. ENTRADA DE DADOS DO AMBIENTE ---
     with st.expander("🏠 Dados do Ambiente", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -562,12 +608,10 @@ elif aba == "💡 Luminotecnica":
         with c3:
             h_luminaria = st.number_input("Altura da luminária ao teto (m):", min_value=0.0, value=0.0, help="Embutida: 0.0m", key="lum_h_lum")
         
-        # Cálculo da altura útil (h)
         h_util = h_total - h_trabalho - h_luminaria
         area_total = comprimento * largura
         st.write(f"**Área Total:** {area_total:.2f} m² | **Altura Útil (h):** {h_util:.2f} m")
 
-    # --- 2. NORMAS E REFLECTÂNCIA ---
     with st.expander("📚 Parâmetros Normativos"):
         col1, col2 = st.columns(2)
         with col1:
@@ -589,7 +633,6 @@ elif aba == "💡 Luminotecnica":
             fator_utilizacao = st.slider("Fator de Utilização (η):", 0.1, 1.0, 0.5, help="Depende da luminária e cores das paredes.", key="lum_fu")
             fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo", key="lum_fm")
 
-    # --- 3. DADOS DA LUMINÁRIA ---
     with st.expander("🔦 Especificações da Lâmpada/Luminária"):
         c1, c2 = st.columns(2)
         with c1:
@@ -597,22 +640,19 @@ elif aba == "💡 Luminotecnica":
         with c2:
             potencia_unit = st.number_input("Potência por Luminária (W):", min_value=1, value=24, key="lum_pot_u")
 
-    # --- 4. CÁLCULOS FINAIS ---
     fluxo_total_necessario = (nivel_iluminancia * area_total) / (fator_utilizacao * fator_perdas)
     quantidade_n = fluxo_total_necessario / fluxo_unitario
-    quantidade_final = int(-(-quantidade_n // 1))  # Arredonda para cima
+    quantidade_final = int(-(-quantidade_n // 1))
     
     potencia_total = quantidade_final * potencia_unit
     densidade_potencia = potencia_total / area_total
 
-    # --- 5. RESULTADOS ---
     st.subheader("📊 Resultado do Dimensionamento")
     res1, res2, res3 = st.columns(3)
     res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
     res2.metric("Potência Total", f"{potencia_total} W")
     res3.metric("W/m²", f"{densidade_potencia:.2f}")
 
-    # Layout Sugerido (Distribuição)
     st.write("---")
     st.subheader("📐 Sugestão de Distribuição")
     proporcao = comprimento / largura
@@ -622,7 +662,6 @@ elif aba == "💡 Luminotecnica":
     st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
     st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
 
-    # Criamos os dados para passar para o PDF
     dados_atuais = {
         "nivel_lux": nivel_iluminancia,
         "qtd_luminarias": quantidade_final,
@@ -631,7 +670,6 @@ elif aba == "💡 Luminotecnica":
         "distribuicao": f"{round(colunas)}x{round(linhas)}"
     }
 
-    # O botão de download precisa gerar o conteúdo na hora
     try:
         pdf_bytes = gerar_pdf_resultado_lumino(dados_atuais, st.session_state.get('perfil', {}))
         
@@ -786,5 +824,3 @@ with c_ft2:
 with c_ft3:
     if st.session_state.user:
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
-
-# --- FIM DO CÓDIGO ---
