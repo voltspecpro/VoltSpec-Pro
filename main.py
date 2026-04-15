@@ -525,7 +525,7 @@ elif aba == "🏠 Cargas":
 
 
 # --- MÓDULO Luminotecnica  ---
-    if aba== "💡 Luminotecnica":
+    elif  aba == "💡 Luminotecnica":
             st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
             st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
 
