@@ -424,6 +424,17 @@ if aba == "⚙️ Perfil":
 
     if st.button("💾 Salvar na Nuvem"):
         salvar_perfil_supabase()
+        if st.session_state.perfil.get('status_assinatura') != 'ativo':
+         st.divider()
+        st.subheader("💎 Plano Premium")
+        st.write("Sua conta atual é de teste. Faça o upgrade para uso ilimitado.")
+        c_up1, c_up2, c_up3 = st.columns(3)
+        with c_up1:
+            st.link_button("Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
+        with c_up2:
+            st.link_button("Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
+        with c_up3:
+            st.link_button("Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
