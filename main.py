@@ -429,26 +429,26 @@ if st.button("💾 Salvar na Nuvem"):
 if st.session_state.perfil.get('status_assinatura') != 'ativo':
         st.divider()
         st.subheader("💎 Escolha seu Plano Premium")
-        st.write("Libere todos os módulos (Elétrica + CLI Spec Pro) e relatórios personalizados.")
+        st.write("Libere todos os módulos  e relatórios personalizados.")
         
         c_up1, c_up2, c_up3 = st.columns(3)
         
         with c_up1:
             st.info("**Plano Mensal**")
-            st.markdown("### R$ 49,90")
+            st.markdown("### R$ 19,90")
             st.caption("Acesso total mês a mês")
             st.link_button("💳 Assinar Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
             
         with c_up2:
             st.success("**Plano Trimestral**")
-            st.markdown("### R$ 129,90")
-            st.caption("Equivale a R$ 43,30/mês")
+            st.markdown("### R$ 49,90")
+            st.caption("Equivale a R$ 16,63/mês")
             st.link_button("💳 Assinar Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
             
         with c_up3:
             st.warning("**Plano Anual**")
-            st.markdown("### R$ 399,90")
-            st.caption("Equivale a R$ 33,32/mês (Economize 30%)")
+            st.markdown("### R$ 149,90")
+            st.caption("Equivale a R$ 12,49/mês")
             st.link_button("💳 Assinar Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
 
         st.caption("⚠️ O acesso é liberado automaticamente após a confirmação do pagamento pelo Mercado Pago.")
@@ -912,9 +912,9 @@ elif aba == "🛒 Produtos":
 st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
 with c_ft1:
-    st.caption(f"📍 {st.session_state.get('endereco', 'Araxá - MG')}")
+    st.caption(f"📍 {st.session_state.get('endereco', )}")
 with c_ft2:
-    st.caption("⚡ Desenvolvido por CLI Spec Pro / Danilo Reis")
+    st.caption("⚡ Desenvolvido por Spec Pro ")
 with c_ft3:
     if st.session_state.get('user'):
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
