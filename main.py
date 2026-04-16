@@ -308,6 +308,27 @@ if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
 # ----------------------------------------------------
 # SE NÃO TIVER ACESSO (PAYWALL)
 # ----------------------------------------------------
+# --- ÁREA DE UPGRADE NA SIDEBAR ---
+# Essa parte deve ficar fora de qualquer condição de erro para estar sempre visível
+if st.session_state.get('status_assinatura') != 'ativo':
+    st.sidebar.divider()
+    with st.sidebar.expander("⭐ SEJA PREMIUM", expanded=True):
+        st.write("Libere acesso vitalício e suporte prioritário.")
+        
+        # Botões com os IDs de plano que você já configurou
+        st.link_button("Assinar Mensal", 
+                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", 
+                       use_container_width=True)
+        
+        st.link_button("Assinar Trimestral", 
+                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", 
+                       type="primary", 
+                       use_container_width=True)
+        
+        st.link_button("Assinar Anual (Melhor Valor)", 
+                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5", 
+                       use_container_width=True)
+    st.sidebar.divider()
 if not tem_acesso:
     st.error("🔒 Seu período de teste expirou!")
     st.title("Assine o VoltSpec Pro")
