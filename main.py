@@ -411,30 +411,47 @@ aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecn
 
 # --- MÓDULO PERFIL ---
 if aba == "⚙️ Perfil":
-    st.header("⚙️ Configurações do Técnico")
-    c1, c2 = st.columns(2)
-    with c1:
+ st.header("⚙️ Configurações do Técnico")
+c1, c2 = st.columns(2)
+with c1:
         st.session_state.perfil['nome_empresa'] = st.text_input("Empresa:", value=st.session_state.perfil.get('nome_empresa', ''))
         st.session_state.perfil['crt']          = st.text_input("CRT/CFT:", value=st.session_state.perfil.get('crt', ''))
         st.session_state.perfil['telefone']     = st.text_input("WhatsApp:", value=st.session_state.perfil.get('telefone', ''))
-    with c2:
+with c2:
         st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
         st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
         st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
 
-    if st.button("💾 Salvar na Nuvem"):
+if st.button("💾 Salvar na Nuvem"):
         salvar_perfil_supabase()
-        if st.session_state.perfil.get('status_assinatura') != 'ativo':
-         st.divider()
-        st.subheader("💎 Plano Premium")
-        st.write("Sua conta atual é de teste. Faça o upgrade para uso ilimitado.")
+
+    # --- ÁREA DE UPGRADE COM VALORES EM DESTAQUE ---
+if st.session_state.perfil.get('status_assinatura') != 'ativo':
+        st.divider()
+        st.subheader("💎 Escolha seu Plano Premium")
+        st.write("Libere todos os módulos (Elétrica + CLI Spec Pro) e relatórios personalizados.")
+        
         c_up1, c_up2, c_up3 = st.columns(3)
+        
         with c_up1:
-            st.link_button("Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
+            st.info("**Plano Mensal**")
+            st.markdown("### R$ 49,90")
+            st.caption("Acesso total mês a mês")
+            st.link_button("💳 Assinar Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
+            
         with c_up2:
-            st.link_button("Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
+            st.success("**Plano Trimestral**")
+            st.markdown("### R$ 129,90")
+            st.caption("Equivale a R$ 43,30/mês")
+            st.link_button("💳 Assinar Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
+            
         with c_up3:
-            st.link_button("Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
+            st.warning("**Plano Anual**")
+            st.markdown("### R$ 399,90")
+            st.caption("Equivale a R$ 33,32/mês (Economize 30%)")
+            st.link_button("💳 Assinar Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
+
+        st.caption("⚠️ O acesso é liberado automaticamente após a confirmação do pagamento pelo Mercado Pago.")
 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
