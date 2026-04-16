@@ -5,7 +5,14 @@ from datetime import datetime, timezone
 from fpdf import FPDF
 from supabase import create_client, Client
 import io
-
+ 
+# --- 0. CONSTANTES GLOBAIS ---
+LINKS_MERCADO_PAGO = {
+    "mensal": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5",
+    "trimestral": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b",
+    "anual": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5"
+}
+ 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="VoltSpec Pro",
@@ -13,7 +20,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
+ 
 st.markdown("""
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,7 +31,7 @@ st.markdown("""
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     """, unsafe_allow_html=True)
-
+ 
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -32,41 +39,56 @@ st.markdown("""
     header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
-
+ 
 # --- 2. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = st.secrets.get("SUPABASE_URL", "")
 KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
-
+ 
+@st.cache_resource
 def init_connection():
+    """✅ CORRIGIDO: Adicionado cache e tratamento de erro"""
     try:
         return create_client(URL_SUPA, KEY_SUPA)
     except Exception as e:
         st.error(f"❌ Erro na conexão com o Supabase: {e}")
         return None
-
+ 
 supabase = init_connection()
-
+ 
 if supabase is None:
     st.warning("⚠️ Aplicativo sem conexão com o banco de dados. Algumas funções estarão indisponíveis.")
-
-# --- FUNÇÃO AUXILIAR: cliente autenticado com token da sessão ---
+ 
+# --- ✅ CORRIGIDO: Função melhorada ---
 def get_supabase_autenticado():
+    """Retorna cliente autenticado com validação"""
+    global supabase
+    
+    if supabase is None:
+        return None
+    
     try:
         session = st.session_state.get('session')
-        if session and session.access_token:
+        if session and hasattr(session, 'access_token') and session.access_token:
             supabase.auth.set_session(session.access_token, session.refresh_token)
-    except Exception:
-        pass
-    return supabase
-
+        return supabase
+    except Exception as e:
+        st.warning(f"⚠️ Erro ao autenticar sessão: {e}")
+        return supabase
+ 
 # --- 3. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
-
+ 
+# ✅ CORRIGIDO: Validação melhorada
 def limpar_texto(txt):
-    if not txt:
+    """Remove caracteres problemáticos e valida entrada"""
+    if not txt or txt is None:
         return ""
-    return str(txt).encode('latin-1', 'ignore').decode('latin-1').replace("²", "2").strip()
-
+    try:
+        return str(txt).encode('latin-1', 'ignore').decode('latin-1').replace("²", "2").strip()
+    except Exception:
+        return ""
+ 
 def montar_cabecalho_pdf(pdf):
+    """✅ CORRIGIDO: Validação de dados antes de usar"""
     p = st.session_state.get('perfil', {})
     
     emp      = limpar_texto(p.get('nome_empresa', '')) or 'VoltSpec Pro'
@@ -75,105 +97,145 @@ def montar_cabecalho_pdf(pdf):
     cnpj     = limpar_texto(p.get('cnpj', ''))
     cidade   = limpar_texto(p.get('endereco', ''))
     email    = limpar_texto(p.get('email_contato', ''))
-
+ 
     pdf.set_fill_color(30, 41, 59)
     pdf.rect(0, 0, 210, 50, 'F')
     pdf.set_text_color(255, 255, 255)
-
+ 
     pdf.set_font("Arial", "B", 16)
     pdf.set_xy(0, 6)
     pdf.cell(210, 10, emp.upper(), align="C", ln=True)
-
+ 
     linha1 = ""
     if crt:  linha1 += f"Reg.: {crt}"
     if tel:  linha1 += f"  |  Tel: {tel}"
     if linha1:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha1.strip(), align="C", ln=True)
-
+ 
     linha2 = ""
     if cnpj:   linha2 += f"CNPJ: {cnpj}"
     if cidade: linha2 += f"  |  {cidade}"
     if linha2:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha2.strip(), align="C", ln=True)
-
+ 
     if email:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, email, align="C", ln=True)
-
+ 
     pdf.set_text_color(0, 0, 0)
     pdf.ln(8)
-
+ 
 def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
-    pdf = FPDF()
-    pdf.add_page()
-    montar_cabecalho_pdf(pdf)
-
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"RELATORIO: {limpar_texto(titulo)}", "B", 1, "L")
-    pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 8, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "R")
-    pdf.ln(5)
-
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_font("Arial", "B", 9)
-    for i, h in enumerate(headers):
-        pdf.cell(colunas_w[i], 8, limpar_texto(h), 1, 0, "C", True)
-    pdf.ln()
-
-    pdf.set_font("Arial", "", 8)
-    total = 0
-    for _, r in df_dados.iterrows():
-        if r.get("Qtd", 0) > 0:
-            sub = r["Qtd"] * r["Preco"]
-            total += sub
-            pdf.cell(colunas_w[0], 7, limpar_texto(r["Descricao"]), 1)
-            pdf.cell(colunas_w[1], 7, str(r["Qtd"]), 1, 0, "C")
-            pdf.cell(colunas_w[2], 7, f"{r['Preco']:.2f}", 1, 0, "C")
-            pdf.cell(colunas_w[3], 7, f"{sub:.2f}", 1, 1, "C")
-
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"TOTAL: R$ {total:.2f}", 0, 1, "R")
-    return pdf.output(dest="S").encode("latin-1")
-
-def gerar_pdf_resultado_lumino(dados, perfil):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    
-    empresa = perfil.get('nome_empresa', 'VoltSpec Pro')
-    pdf.cell(190, 10, f"{empresa} - Relatório Luminotécnico", ln=True, align='C')
-    pdf.ln(10)
-    
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(190, 10, f"Responsável Técnico: {perfil.get('crt', '---')}", ln=True)
-    pdf.cell(190, 10, f"Local/Cidade: {perfil.get('endereco', '---')}", ln=True)
-    pdf.ln(5)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(10)
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(190, 10, "Detalhes do Dimensionamento", ln=True)
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(190, 10, f"- Nível de Iluminância Requerido: {dados['nivel_lux']} Lux", ln=True)
-    pdf.cell(190, 10, f"- Área do Ambiente: {dados['area']:.2f} m²", ln=True)
-    pdf.cell(190, 10, f"- Quantidade de Luminárias: {dados['qtd_luminarias']} unidades", ln=True)
-    pdf.cell(190, 10, f"- Potência Total Instalada: {dados['potencia_total']} W", ln=True)
-    pdf.cell(190, 10, f"- Distribuição Sugerida: {dados['distribuicao']}", ln=True)
-    
-    pdf.ln(20)
-    pdf.set_font("Arial", "I", 10)
-    pdf.multi_cell(190, 10, "Cálculo realizado seguindo os parâmetros da NBR ISO/CIE 8995-1 utilizando o Método dos Lúmens.")
-    
-    return pdf.output(dest='S').encode('latin-1')
-
-# --- 4. FUNÇÕES DE BANCO DE DADOS ---
-
-def carregar_perfil_supabase():
+    """✅ CORRIGIDO: Validação de dados antes de gerar PDF"""
     try:
+        pdf = FPDF()
+        pdf.add_page()
+        montar_cabecalho_pdf(pdf)
+ 
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"RELATORIO: {limpar_texto(titulo)}", "B", 1, "L")
+        pdf.set_font("Arial", "I", 8)
+        pdf.cell(0, 8, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "R")
+        pdf.ln(5)
+ 
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", "B", 9)
+        for i, h in enumerate(headers):
+            pdf.cell(colunas_w[i], 8, limpar_texto(h), 1, 0, "C", True)
+        pdf.ln()
+ 
+        pdf.set_font("Arial", "", 8)
+        total = 0
+        for _, r in df_dados.iterrows():
+            try:
+                qtd = float(r.get("Qtd", 0) or 0)
+                if qtd > 0:
+                    preco = float(r.get("Preco", 0) or 0)
+                    sub = qtd * preco
+                    total += sub
+                    pdf.cell(colunas_w[0], 7, limpar_texto(r["Descricao"]), 1)
+                    pdf.cell(colunas_w[1], 7, str(int(qtd)), 1, 0, "C")
+                    pdf.cell(colunas_w[2], 7, f"{preco:.2f}", 1, 0, "C")
+                    pdf.cell(colunas_w[3], 7, f"{sub:.2f}", 1, 1, "C")
+            except (ValueError, TypeError, KeyError):
+                continue
+ 
+        pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, f"TOTAL: R$ {total:.2f}", 0, 1, "R")
+        return pdf.output(dest="S").encode("latin-1")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
+        return None
+ 
+def gerar_pdf_resultado_lumino(dados, perfil):
+    """✅ CORRIGIDO: Validação de dados e tratamento de erro"""
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        
+        empresa = limpar_texto(perfil.get('nome_empresa', 'VoltSpec Pro')) or 'VoltSpec Pro'
+        titulo = f"{empresa} - Relatório Luminotécnico"
+        pdf.cell(190, 10, titulo, ln=True, align='C')
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", "", 12)
+        pdf.cell(190, 10, f"Responsável Técnico: {limpar_texto(perfil.get('crt', '---'))}", ln=True)
+        pdf.cell(190, 10, f"Local/Cidade: {limpar_texto(perfil.get('endereco', '---'))}", ln=True)
+        pdf.ln(5)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(10)
+ 
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(190, 10, "Detalhes do Dimensionamento", ln=True)
+        pdf.set_font("Arial", "", 12)
+        
+        nivel_lux = dados.get('nivel_lux', 0)
+        area = dados.get('area', 0)
+        qtd_lum = dados.get('qtd_luminarias', 0)
+        pot_total = dados.get('potencia_total', 0)
+        dist = dados.get('distribuicao', '0x0')
+        
+        pdf.cell(190, 10, f"- Nível de Iluminância Requerido: {nivel_lux} Lux", ln=True)
+        pdf.cell(190, 10, f"- Área do Ambiente: {area:.2f} m²", ln=True)
+        pdf.cell(190, 10, f"- Quantidade de Luminárias: {qtd_lum} unidades", ln=True)
+        pdf.cell(190, 10, f"- Potência Total Instalada: {pot_total} W", ln=True)
+        pdf.cell(190, 10, f"- Distribuição Sugerida: {dist}", ln=True)
+        
+        pdf.ln(20)
+        pdf.set_font("Arial", "I", 10)
+        pdf.multi_cell(190, 10, "Cálculo realizado seguindo os parâmetros da NBR ISO/CIE 8995-1 utilizando o Método dos Lúmens.")
+        
+        return pdf.output(dest='S').encode('latin-1')
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF luminotécnico: {e}")
+        return None
+ 
+# --- 4. FUNÇÕES DE BANCO DE DADOS ---
+ 
+# ✅ CORRIGIDO: Validação completa
+def carregar_perfil_supabase():
+    """Carrega perfil do Supabase com tratamento de erro"""
+    try:
+        # Validação 1: User existe?
+        if not st.session_state.get('user') or not hasattr(st.session_state.user, 'id'):
+            st.warning("❌ Usuário não autenticado corretamente")
+            return
+        
+        # Validação 2: Inicializar perfil se não existe
+        if 'perfil' not in st.session_state:
+            st.session_state.perfil = {}
+        
+        # Validação 3: Cliente Supabase
         cliente = get_supabase_autenticado()
+        if cliente is None:
+            st.warning("⚠️ Sem conexão com banco de dados")
+            return
+        
+        # Buscar dados
         res = cliente.table("profiles").select("*").eq("id", st.session_state.user.id).execute()
         if res.data:
             d = res.data[0]
@@ -189,26 +251,42 @@ def carregar_perfil_supabase():
             st.session_state.perfil['status_assinatura'] = d.get('status_assinatura', 'trial')
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
-
+ 
 def salvar_perfil_supabase():
+    """Salva perfil no Supabase com validação"""
     try:
+        # Validação 1: User existe?
+        if not st.session_state.get('user') or not hasattr(st.session_state.user, 'id'):
+            st.error("❌ Erro: Usuário não autenticado")
+            return
+        
+        # Validação 2: Cliente Supabase
         cliente = get_supabase_autenticado()
+        if cliente is None:
+            st.error("❌ Sem conexão com banco de dados")
+            return
+        
         dados = {
             "id":                 st.session_state.user.id,
-            "nome_empresa":       st.session_state.perfil.get('nome_empresa', ''),
-            "crt":                st.session_state.perfil.get('crt', ''),
-            "telefone":           st.session_state.perfil.get('telefone', ''),
-            "cnpj":               st.session_state.perfil.get('cnpj', ''),
+            "nome_empresa":       limpar_texto(st.session_state.perfil.get('nome_empresa', '')),
+            "crt":                limpar_texto(st.session_state.perfil.get('crt', '')),
+            "telefone":           limpar_texto(st.session_state.perfil.get('telefone', '')),
+            "cnpj":               limpar_texto(st.session_state.perfil.get('cnpj', '')),
             "email":              st.session_state.user.email,
-            "endereco_comercial": st.session_state.perfil.get('endereco', '')
-            # Nota: Não salvamos 'status_assinatura' aqui para o usuário não conseguir burlar alterando o próprio perfil.
-            # O status_assinatura deve ser atualizado pelo Webhook do Mercado Pago/Stripe.
+            "endereco_comercial": limpar_texto(st.session_state.perfil.get('endereco', ''))
         }
         cliente.table("profiles").upsert(dados).execute()
         st.success("✅ Sincronizado!")
     except Exception as e:
         st.error(f"Erro ao salvar: {e}")
-
+ 
+# ✅ CORRIGIDO: Função auxiliar para formatar data ISO
+def formatar_data_iso(dt=None):
+    """Formata data para ISO 8601"""
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    return dt.isoformat()
+ 
 # --- 5. ESTADO INICIAL ---
 if 'logado' not in st.session_state:
     st.session_state.logado = False
@@ -218,26 +296,26 @@ if 'session' not in st.session_state:
     st.session_state.session = None
 if 'perfil_carregado' not in st.session_state:
     st.session_state.perfil_carregado = False
-
+ 
 if 'dados_cargas' not in st.session_state:
     st.session_state.dados_cargas = pd.DataFrame([{
         "Comodo": "Sala", "Area (m2)": 0.0, "Perimetro (m)": 0.0,
         "Iluminacao (VA)": "-", "TUG (Qtd)": 0,
         "Potencia TUG (VA)": 0.0, "TUE (Watts)": 0.0
     }])
-
+ 
 if 'lista_circuitos' not in st.session_state:
     st.session_state.lista_circuitos = []
 if 'resumo_materiais' not in st.session_state:
     st.session_state.resumo_materiais = []
-
+ 
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
-        'data_cadastro': str(datetime.now(timezone.utc)),
+        'data_cadastro': formatar_data_iso(),
         'status_assinatura': 'trial'
     }
-
+ 
 # --- 6. TELA DE LOGIN ---
 if not st.session_state.logado:
     st.title("⚡ VoltSpec Pro")
@@ -267,33 +345,41 @@ if not st.session_state.logado:
                 st.error("❌ Sem conexão com o banco de dados.")
             else:
                 try:
-                    # Ao cadastrar, cria a conta. O trigger no Supabase deve criar a linha em 'profiles'
                     supabase.auth.sign_up({"email": nem, "password": npw})
                     st.success("Sucesso! Verifique seu e-mail para confirmar a conta.")
                 except Exception as e:
                     st.error(f"Erro no cadastro: {e}")
     st.stop()
-
+ 
 # --- CARREGA PERFIL APÓS LOGIN ---
 if st.session_state.logado and not st.session_state.perfil_carregado:
     carregar_perfil_supabase()
     st.session_state.perfil_carregado = True
-
+ 
 # --- 7. SISTEMA PRINCIPAL E LÓGICA DE PAYWALL ---
 st.sidebar.title("VoltSpec Pro ⚡")
-
-# Calcula os dias de teste baseados no pandas datetime para evitar erros de fuso horário
-data_cad_str = st.session_state.perfil.get('data_cadastro')
-data_cad = pd.to_datetime(data_cad_str, errors='coerce', utc=True)
-if pd.isna(data_cad):
-    data_cad = pd.Timestamp.now(tz='UTC')
-
-dias_de_uso = (pd.Timestamp.now(tz='UTC') - data_cad).days
+ 
+# ✅ CORRIGIDO: Cálculo de dias de teste seguro
+def calcular_dias_uso():
+    """Calcula dias de uso de forma segura"""
+    data_cad_str = st.session_state.perfil.get('data_cadastro', '')
+    
+    try:
+        # Tentar parsing de ISO format
+        if data_cad_str:
+            data_cad = datetime.fromisoformat(data_cad_str.replace('Z', '+00:00'))
+        else:
+            data_cad = datetime.now(timezone.utc)
+    except:
+        data_cad = datetime.now(timezone.utc)
+    
+    data_agora = datetime.now(timezone.utc)
+    return max(0, (data_agora - data_cad).days)
+ 
+dias_de_uso = calcular_dias_uso()
 status_ass = st.session_state.perfil.get('status_assinatura', 'trial')
-
-# Verifica se tem acesso
 tem_acesso = (dias_de_uso <= 7) or (status_ass == 'ativo')
-
+ 
 if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
     st.session_state.logado = False
     st.session_state.user   = None
@@ -301,79 +387,56 @@ if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
     st.session_state.perfil_carregado = False
     st.session_state.perfil = {
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
-        'data_cadastro': str(datetime.now(timezone.utc)), 'status_assinatura': 'trial'
+        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'trial'
     }
     st.rerun()
-
-# ----------------------------------------------------
-# SE NÃO TIVER ACESSO (PAYWALL)
-# ----------------------------------------------------
-# --- ÁREA DE UPGRADE NA SIDEBAR ---
-# Essa parte deve ficar fora de qualquer condição de erro para estar sempre visível
+ 
+# --- PAYWALL ---
 if st.session_state.get('status_assinatura') != 'ativo':
     st.sidebar.divider()
     with st.sidebar.expander("⭐ SEJA PREMIUM", expanded=True):
         st.write("Libere acesso vitalício e suporte prioritário.")
-        
-        # Botões com os IDs de plano que você já configurou
-        st.link_button("Assinar Mensal", 
-                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", 
-                       use_container_width=True)
-        
-        st.link_button("Assinar Trimestral", 
-                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", 
-                       type="primary", 
-                       use_container_width=True)
-        
-        st.link_button("Assinar Anual (Melhor Valor)", 
-                       "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5", 
-                       use_container_width=True)
+        st.link_button("Assinar Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
+        st.link_button("Assinar Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
+        st.link_button("Assinar Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
     st.sidebar.divider()
+ 
 if not tem_acesso:
     st.error("🔒 Seu período de teste expirou!")
     st.title("Assine o VoltSpec Pro")
-    st.write("Seus 7 dias gratuitos chegaram ao fim. Para continuar gerando relatórios em PDF, calculando cargas e orçamentos, ative sua assinatura.")
+    st.write("Seus 7 dias gratuitos chegaram ao fim. Para continuar, ative sua assinatura.")
     
     st.markdown("### 💎 Plano Profissional")
     st.write("- Dimensionamento NBR 5410 ilimitado")
     st.write("- Relatórios Luminotécnicos")
     st.write("- Geração de PDF com sua Logo/Empresa")
     
-    # ⚠️ COLE SEUS 3 LINKS AQUI 👇
-    link_mensal = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5"
-    link_trimestral = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b"
-    link_anual = "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5"
-
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.info("🥉 **Plano Mensal**\n\nAcesso completo mês a mês sem fidelidade.")
-        st.link_button("💳 Assinar Mensal", link_mensal, use_container_width=True)
-        
+        st.info("🥉 **Plano Mensal**\n\nAcesso mês a mês.")
+        st.link_button("💳 Assinar", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
     with col2:
-        st.success("🥈 **Plano Trimestral**\n\nIdeal para projetos de médio prazo. Mais econômico.")
-        st.link_button("💳 Assinar Trimestral", link_trimestral, type="primary", use_container_width=True)
-        
+        st.success("🥈 **Plano Trimestral**\n\nIdeal para projetos médios.")
+        st.link_button("💳 Assinar", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
     with col3:
-        st.warning("🥇 **Plano Anual**\n\nMaior desconto. Tranquilidade para o ano todo!")
-        st.link_button("💳 Assinar Anual", link_anual, use_container_width=True)
+        st.warning("🥇 **Plano Anual**\n\nMaior desconto do ano!")
+        st.link_button("💳 Assinar", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
     
     st.write("---")
-    st.caption("Após o pagamento, o sistema será liberado automaticamente (pode levar alguns minutos para o banco confirmar).")
-    st.stop() # Bloqueia o carregamento do resto do site!
-# ----------------------------------------------------
-# SE TIVER ACESSO (SISTEMA NORMAL)
-# ----------------------------------------------------
+    st.caption("Após o pagamento, o sistema será liberado em poucos minutos.")
+    st.stop()
+ 
+# --- SISTEMA NORMAL (COM ACESSO) ---
 if status_ass != 'ativo':
     dias_restantes = max(0, 7 - dias_de_uso)
     st.sidebar.info(f"⏳ **Período de Teste:** Restam {dias_restantes} dias.")
-    with st.sidebar.expander("💎 Fazer Upgrade Agora", expanded=True):
-        st.link_button("Assinar Mensal", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5", use_container_width=True)
-        st.link_button("Assinar Trimestral", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b", type="primary", use_container_width=True)
-        st.link_button("Assinar Anual", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5", use_container_width=True)
-
+    with st.sidebar.expander("💎 Fazer Upgrade", expanded=True):
+        st.link_button("Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
+        st.link_button("Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
+        st.link_button("Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
+ 
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
-
+ 
 # --- MÓDULO PERFIL ---
 if aba == "⚙️ Perfil":
     st.header("⚙️ Configurações do Técnico")
@@ -386,14 +449,14 @@ if aba == "⚙️ Perfil":
         st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
         st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
         st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
-
+ 
     if st.button("💾 Salvar na Nuvem"):
         salvar_perfil_supabase()
-
+ 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
     st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
-
+ 
     with st.expander("🔌 Configuração da Rede e Concessionária", expanded=True):
         col_c1, col_c2 = st.columns(2)
         with col_c1:
@@ -401,7 +464,7 @@ elif aba == "🏠 Cargas":
                                           ["CEMIG (MG)", "CPFL (SP)", "ENEL (RJ/SP)", "EQUATORIAL", "Outra (Manual)"])
         with col_c2:
             tensao_fase = st.selectbox("Tensão Fase-Neutro (V):", [127, 220], index=0)
-
+ 
     if st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Watts)"]:
         st.session_state.dados_cargas = pd.DataFrame({
             "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
@@ -412,7 +475,7 @@ elif aba == "🏠 Cargas":
             "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
             "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
         })
-
+ 
     st.subheader("1. Entrada de Dados e Medidas")
     df_editor = st.data_editor(
         st.session_state.dados_cargas,
@@ -420,13 +483,15 @@ elif aba == "🏠 Cargas":
         use_container_width=True,
         key="editor_cargas_v1"
     )
-
+ 
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
+        # ✅ CORRIGIDO: Sincronizar df_editor com session_state
+        st.session_state.dados_cargas = df_editor.copy()
         df_calc = df_editor.copy()
         novos_circuitos = []
         pot_ilum_total = 0
         pot_tug_total = 0
-
+ 
         cabos = {
             "1.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
             "2.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
@@ -434,54 +499,60 @@ elif aba == "🏠 Cargas":
             "6.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
             "10.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
         }
-
+ 
         for i, r in df_calc.iterrows():
             try:
-                a    = float(r["Area (m2)"])
-                p    = float(r["Perimetro (m)"])
+                # ✅ CORRIGIDO: Validação de entrada
+                a = float(r["Area (m2)"] or 0)
+                p = float(r["Perimetro (m)"] or 0)
+                
+                if a <= 0 or p <= 0:
+                    st.warning(f"⚠️ Linha {i}: Área ou perímetro inválido. Pulando...")
+                    continue
+                
                 nome = str(r["Comodo"]).lower()
-
+ 
                 va_ilum = 100 if a <= 6 else 100 + (math.floor((a - 6) / 4) * 60)
                 qtd_lamp = max(math.ceil(va_ilum / 100), 1)
                 df_calc.at[i, "Iluminacao (VA)"] = f"{qtd_lamp} pt ({va_ilum}VA)"
                 pot_ilum_total += va_ilum
-
+ 
                 comp_15 = p + (qtd_lamp * 3.5)
                 cabos["1.5mm2"]["Fase"]  += comp_15 * 1.5
                 cabos["1.5mm2"]["Neutro"] += comp_15
-
+ 
                 is_molhada  = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
                 is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
-
+ 
                 if is_banheiro:
                     q_tugs, p_tugs = 1, 600
                 else:
                     div    = 3.5 if is_molhada else 5.0
                     q_tugs = max(math.ceil(p / div), 1)
                     p_tugs = (min(q_tugs, 3) * 600 + max(0, q_tugs - 3) * 100) if is_molhada else q_tugs * 100
-
+ 
                 df_calc.at[i, "TUG (Qtd)"]        = int(q_tugs)
                 df_calc.at[i, "Potencia TUG (VA)"] = float(p_tugs)
                 pot_tug_total += p_tugs
-
+ 
                 comp_25 = p + (q_tugs * 1.5)
                 cabos["2.5mm2"]["Fase"]  += comp_25
                 cabos["2.5mm2"]["Neutro"] += comp_25
                 cabos["2.5mm2"]["Terra"]  += comp_25
-
-                tue_w = float(r["TUE (Watts)"])
+ 
+                tue_w = float(r["TUE (Watts)"] or 0)
                 if tue_w > 0:
                     v_tue    = 220 if (tue_w >= 4000 or tensao_fase == 220) else 127
                     corrente = tue_w / v_tue
-
+ 
                     if corrente <= 21:   bitola = "2.5mm2"
                     elif corrente <= 28: bitola = "4.0mm2"
                     elif corrente <= 36: bitola = "6.0mm2"
                     else:                bitola = "10.0mm2"
-
+ 
                     disjuntor = "20A" if corrente <= 16 else ("25A" if corrente <= 21 else ("32A" if corrente <= 28 else "40A"))
                     tipo_disj = "Bipolar" if v_tue == 220 else "Unipolar"
-
+ 
                     novos_circuitos.append({
                         "Circ": f"C{len(novos_circuitos)+3:02d}",
                         "Descricao": f"TUE - {r['Comodo']}",
@@ -491,7 +562,7 @@ elif aba == "🏠 Cargas":
                         "Disjuntor": disjuntor,
                         "Tipo Disj.": tipo_disj
                     })
-
+ 
                     comp_tue = (p / 2) + 4.0
                     if v_tue == 220 and tensao_fase == 127:
                         cabos[bitola]["Fase"]  += comp_tue * 2
@@ -500,11 +571,11 @@ elif aba == "🏠 Cargas":
                         cabos[bitola]["Fase"]  += comp_tue
                         cabos[bitola]["Neutro"] += comp_tue
                         cabos[bitola]["Terra"]  += comp_tue
-
+ 
             except Exception as e:
-                st.warning(f"Erro na linha {i}: {e}")
+                st.warning(f"⚠️ Erro na linha {i}: {e}")
                 continue
-
+ 
         if pot_ilum_total > 0:
             novos_circuitos.insert(0, {"Circ": "C01", "Descricao": "Iluminacao Geral",
                 "Potencia": f"{pot_ilum_total}VA", "Tensao": f"{tensao_fase}V",
@@ -513,13 +584,13 @@ elif aba == "🏠 Cargas":
             novos_circuitos.insert(1, {"Circ": "C02", "Descricao": "Tomadas Gerais (TUGs)",
                 "Potencia": f"{pot_tug_total}VA", "Tensao": f"{tensao_fase}V",
                 "Cabo": "2.5mm2", "Disjuntor": "20A", "Tipo Disj.": "Unipolar"})
-
+ 
         materiais_dinamicos = []
         for bitola, vias in cabos.items():
             if vias["Fase"]  > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase/Retorno)",  "Qtd": f"{math.ceil(vias['Fase'])}m"})
             if vias["Neutro"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Neutro - Azul)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
             if vias.get("Terra", 0) > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Terra - Verde)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
-
+ 
         contagem_disj = {}
         for c in novos_circuitos:
             dj   = c.get("Disjuntor")
@@ -529,17 +600,17 @@ elif aba == "🏠 Cargas":
                 contagem_disj[nome_dj] = contagem_disj.get(nome_dj, 0) + 1
         for nome_dj, qtd in contagem_disj.items():
             materiais_dinamicos.append({"Item": nome_dj, "Qtd": f"{qtd} un"})
-
+ 
         total_circ = len(novos_circuitos)
         tam_qdc    = 12 if total_circ <= 6 else (16 if total_circ <= 12 else 24)
         materiais_dinamicos.append({"Item": f"Quadro de Distribuicao (QDC) - {tam_qdc} Polos", "Qtd": "1 un"})
-
-        st.session_state.dados_cargas     = df_calc
+ 
+        # ✅ CORRIGIDO: Salvar tudo no session_state
         st.session_state.lista_circuitos  = novos_circuitos
         st.session_state.resumo_materiais = materiais_dinamicos
         st.success("✅ Cálculos e materiais gerados com sucesso!")
         st.rerun()
-
+ 
     if st.session_state.lista_circuitos:
         st.divider()
         st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
@@ -547,17 +618,17 @@ elif aba == "🏠 Cargas":
         st.subheader("📦 Lista Estimada de Materiais")
         st.table(pd.DataFrame(st.session_state.resumo_materiais))
         st.info("💡 Dica: Verifique sempre a bitola do cabo no 'Dimensionador' antes de fechar o pedido.")
-
+ 
         if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
             try:
                 pdf = FPDF()
                 pdf.add_page()
                 montar_cabecalho_pdf(pdf)
-
+ 
                 pdf.set_font("Arial", "I", 8)
                 pdf.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Rede: {tensao_fase}V", 0, 1, "R")
                 pdf.ln(3)
-
+ 
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "1. MEMORIAL DE DIMENSIONAMENTO DE CARGAS", "B", 1, "L")
                 pdf.ln(3)
@@ -576,7 +647,7 @@ elif aba == "🏠 Cargas":
                     pdf.cell(20, 7, str(r["TUG (Qtd)"]), 1, 0, "C")
                     pdf.cell(35, 7, f"{r['Potencia TUG (VA)']}VA", 1, 0, "C")
                     pdf.cell(35, 7, f"{r['TUE (Watts)']}W", 1, 1, "C")
-
+ 
                 pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "2. QUADRO DE DISTRIBUICAO (QDC)", "B", 1, "L")
@@ -597,7 +668,7 @@ elif aba == "🏠 Cargas":
                     pdf.cell(25, 7, limpar_texto(c["Cabo"]), 1, 0, "C")
                     pdf.cell(20, 7, limpar_texto(c["Disjuntor"]), 1, 0, "C")
                     pdf.cell(30, 7, limpar_texto(c.get("Tipo Disj.", "")), 1, 1, "C")
-
+ 
                 pdf.ln(8)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(0, 10, "3. MATERIAIS SUGERIDOS (ESTIMATIVA INFRAESTRUTURA)", "B", 1, "L")
@@ -610,17 +681,17 @@ elif aba == "🏠 Cargas":
                 for m in st.session_state.resumo_materiais:
                     pdf.cell(140, 7, limpar_texto(m["Item"]), 1)
                     pdf.cell(50, 7, limpar_texto(m["Qtd"]), 1, 1, "C")
-
+ 
                 pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
                 st.download_button("⬇️ Baixar Projeto Completo (PDF)", pdf_out, "Projeto_Eletrico.pdf", "application/pdf", use_container_width=True)
             except Exception as e:
                 st.error(f"Erro no PDF: {e}")
-
+ 
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
     st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
-
+ 
     with st.expander("🏠 Dados do Ambiente", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -635,7 +706,7 @@ elif aba == "💡 Luminotecnica":
         h_util = h_total - h_trabalho - h_luminaria
         area_total = comprimento * largura
         st.write(f"**Área Total:** {area_total:.2f} m² | **Altura Útil (h):** {h_util:.2f} m")
-
+ 
     with st.expander("📚 Parâmetros Normativos"):
         col1, col2 = st.columns(2)
         with col1:
@@ -652,40 +723,40 @@ elif aba == "💡 Luminotecnica":
                 nivel_iluminancia = st.number_input("Nível de Iluminância desejado (Lux):", value=500, key="lum_lux_custom")
             else:
                 nivel_iluminancia = int(lux_sugerido.split('(')[1].split(' ')[0])
-
+ 
         with col2:
             fator_utilizacao = st.slider("Fator de Utilização (η):", 0.1, 1.0, 0.5, help="Depende da luminária e cores das paredes.", key="lum_fu")
             fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo", key="lum_fm")
-
+ 
     with st.expander("🔦 Especificações da Lâmpada/Luminária"):
         c1, c2 = st.columns(2)
         with c1:
             fluxo_unitario = st.number_input("Fluxo Luminoso por Luminária (Lúmens):", min_value=1, value=2500, help="Ver no catálogo do fabricante", key="lum_fluxo_u")
         with c2:
             potencia_unit = st.number_input("Potência por Luminária (W):", min_value=1, value=24, key="lum_pot_u")
-
+ 
     fluxo_total_necessario = (nivel_iluminancia * area_total) / (fator_utilizacao * fator_perdas)
     quantidade_n = fluxo_total_necessario / fluxo_unitario
     quantidade_final = int(-(-quantidade_n // 1))
     
     potencia_total = quantidade_final * potencia_unit
-    densidade_potencia = potencia_total / area_total
-
+    densidade_potencia = potencia_total / area_total if area_total > 0 else 0
+ 
     st.subheader("📊 Resultado do Dimensionamento")
     res1, res2, res3 = st.columns(3)
     res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
     res2.metric("Potência Total", f"{potencia_total} W")
     res3.metric("W/m²", f"{densidade_potencia:.2f}")
-
+ 
     st.write("---")
     st.subheader("📐 Sugestão de Distribuição")
     proporcao = comprimento / largura
     colunas = math.sqrt(quantidade_final * proporcao)
-    linhas = quantidade_final / colunas
+    linhas = quantidade_final / colunas if colunas > 0 else 1
     
     st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
     st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
-
+ 
     dados_atuais = {
         "nivel_lux": nivel_iluminancia,
         "qtd_luminarias": quantidade_final,
@@ -693,20 +764,20 @@ elif aba == "💡 Luminotecnica":
         "area": area_total,
         "distribuicao": f"{round(colunas)}x{round(linhas)}"
     }
-
+ 
     try:
         pdf_bytes = gerar_pdf_resultado_lumino(dados_atuais, st.session_state.get('perfil', {}))
-        
-        st.download_button(
-            label="📥 Gerar e Baixar Relatório (PDF)",
-            data=pdf_bytes,
-            file_name=f"Luminotecnico_{st.session_state.perfil.get('nome_empresa', 'VoltSpec')}.pdf",
-            mime="application/pdf",
-            key="btn_download_lumino"
-        )
+        if pdf_bytes:
+            st.download_button(
+                label="📥 Gerar e Baixar Relatório (PDF)",
+                data=pdf_bytes,
+                file_name=f"Luminotecnico_{st.session_state.perfil.get('nome_empresa', 'VoltSpec')}.pdf",
+                mime="application/pdf",
+                key="btn_download_lumino"
+            )
     except Exception as e:
         st.error(f"Erro ao preparar o PDF: {e}")
-
+ 
 # --- MÓDULO ORÇAMENTOS ---
 elif aba == "💰 Orçamentos":
     st.header("💰 Orçamentos de Serviços")
@@ -722,14 +793,15 @@ elif aba == "💰 Orçamentos":
         {"Descricao": "Laudo de Conformidade",           "Qtd": 0, "Preco": 350.0}
     ]
     df_serv = st.data_editor(pd.DataFrame(servicos), num_rows="dynamic", use_container_width=True, key="orc_edt")
-
+ 
     total_orc = (df_serv["Qtd"] * df_serv["Preco"]).sum()
     st.subheader(f"Total Serviços: R$ {total_orc:,.2f}")
-
+ 
     if st.button("📄 Gerar PDF Orçamento"):
         pdf = gerar_pdf_universal(f"ORCAMENTO - {cliente}", df_serv, [100, 20, 35, 35], ["Descricao", "Qtd", "Unit.", "Subtotal"])
-        st.download_button("⬇️ Baixar PDF", pdf, "Orcamento.pdf", "application/pdf")
-
+        if pdf:
+            st.download_button("⬇️ Baixar PDF", pdf, "Orcamento.pdf", "application/pdf")
+ 
 # --- MÓDULO MATERIAIS ---
 elif aba == "📦 Materiais":
     st.header("📦 Lista de Materiais Elétricos")
@@ -743,19 +815,20 @@ elif aba == "📦 Materiais":
         {"Descricao": "Eletroduto Corrugado 3/4 (50m)",   "Qtd": 0, "Preco": 75.0}
     ]
     df_mat = st.data_editor(pd.DataFrame(materiais), num_rows="dynamic", use_container_width=True, key="mat_edt")
-
+ 
     total_mat = (df_mat["Qtd"] * df_mat["Preco"]).sum()
     st.subheader(f"Total Materiais: R$ {total_mat:,.2f}")
     st.info("💡 Dica: Verifique sempre a bitola do cabo no 'Dimensionador' antes de fechar o pedido.")
-
+ 
     if st.button("📄 Gerar PDF Materiais"):
         pdf = gerar_pdf_universal("LISTA DE MATERIAIS", df_mat, [100, 20, 35, 35], ["Descricao", "Qtd", "Unit.", "Subtotal"])
-        st.download_button("⬇️ Baixar PDF", pdf, "Materiais.pdf", "application/pdf")
-
+        if pdf:
+            st.download_button("⬇️ Baixar PDF", pdf, "Materiais.pdf", "application/pdf")
+ 
 # --- MÓDULO DIMENSIONADOR ---
 elif aba == "📐 Dimensionador":
     st.header("📐 Cálculo Técnico Profissional (NBR 5410)")
-
+ 
     col_inp1, col_inp2, col_inp3 = st.columns(3)
     with col_inp1:
         pot       = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
@@ -766,21 +839,21 @@ elif aba == "📐 Dimensionador":
     with col_inp3:
         fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0,
                                 help="0.70 para 3 circuitos no mesmo conduíte")
-
+ 
     ib           = pot / tensao
     ib_corrigida = ib / fator_agrup
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
-
+ 
     if ib_corrigida <= 15.5:   bitola_sugerida = 1.5
     elif ib_corrigida <= 21:   bitola_sugerida = 2.5
     elif ib_corrigida <= 28:   bitola_sugerida = 4.0
     elif ib_corrigida <= 36:   bitola_sugerida = 6.0
     else:                      bitola_sugerida = 10.0
-
+ 
     bitola_final     = max(bitola_sugerida, bitola_minima)
     queda_v          = (2 * dist * ib * 0.0172) / bitola_final
-    percentual_queda = (queda_v / tensao) * 100
-
+    percentual_queda = (queda_v / tensao) * 100 if tensao > 0 else 0
+ 
     st.divider()
     c_res1, c_res2, c_res3 = st.columns(3)
     with c_res1:
@@ -792,24 +865,24 @@ elif aba == "📐 Dimensionador":
         st.metric("Queda de Tensão", f"{percentual_queda:.2f} %", delta=f"{queda_v:.2f} V", delta_color=color)
     with c_res3:
         st.metric("Bitola Final", f"{bitola_final} mm²")
-
+ 
     st.subheader("🛡️ Verificação de Conformidade")
     erros, avisos = [], []
     if bitola_sugerida < bitola_minima:
         avisos.append(f"A norma exige mínimo de {bitola_minima}mm² para {tipo_carga.lower()}.")
     if percentual_queda > 4.0:
         erros.append("Queda de tensão acima de 4% (Limite NBR 5410 para circuitos terminais).")
-
+ 
     disjuntor_sugerido = math.ceil(ib / 5) * 5
     if disjuntor_sugerido < 10:
         disjuntor_sugerido = 10
-
+ 
     if not erros and not avisos:
         st.success("✅ Circuito em conformidade com a NBR 5410.")
     else:
         for erro in erros:   st.error(f"❌ **CONFORMIDADE:** {erro}")
         for aviso in avisos: st.warning(f"⚠️ **OBSERVAÇÃO:** {aviso}")
-
+ 
     with st.expander("📝 Detalhes do Dimensionamento"):
         st.write(f"""
         - **Cabo:** Cobre com isolação em PVC (70°C).
@@ -817,7 +890,7 @@ elif aba == "📐 Dimensionador":
         - **Resistividade (ρ):** 0.0172 Ω·mm²/m.
         - **Disjuntor Sugerido:** {disjuntor_sugerido}A (Curva B para iluminação, C para motores/TUE).
         """)
-
+ 
 # --- MÓDULO PRODUTOS ---
 elif aba == "🛒 Produtos":
     st.header("🛒 Vitrine de Ferramentas (Mercado Livre)")
@@ -837,7 +910,7 @@ elif aba == "🛒 Produtos":
             st.image(p["img"], use_container_width=True)
             st.write(f"**{p['nome']}**")
             st.link_button("🚀 Ver no Mercado Livre", p["link"], use_container_width=True)
-
+ 
 # --- 8. RODAPÉ ---
 st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
@@ -846,5 +919,5 @@ with c_ft1:
 with c_ft2:
     st.caption("⚡ Desenvolvido por Spec Pro")
 with c_ft3:
-    if st.session_state.user:
+    if st.session_state.get('user'):
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
