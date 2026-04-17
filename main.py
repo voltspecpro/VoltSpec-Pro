@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import math
-from datetime import datetime, timezone
+import requests
+from datetime import datetime, timezone, timedelta
 from fpdf import FPDF
 from supabase import create_client, Client
 import io
@@ -30,9 +31,6 @@ st.markdown("""
     <meta name="msapplication-navbutton-color" content="#000000">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    """, unsafe_allow_html=True)
-
-st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -43,6 +41,7 @@ st.markdown("""
 # --- 2. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = st.secrets.get("SUPABASE_URL", "")
 KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
+MP_ACCESS_TOKEN = st.secrets.get("MP_ACCESS_TOKEN", "") # Adicione isso no seu secrets.toml
 
 @st.cache_resource
 def init_connection():
@@ -70,7 +69,37 @@ def get_supabase_autenticado():
         st.warning(f"⚠️ Erro ao autenticar sessão: {e}")
         return supabase
 
-# --- 3. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
+# --- 3. NOVA FUNÇÃO: VERIFICAR MERCADO PAGO ---
+def verificar_pagamento_direto_mp(email_usuario):
+    """
+    Consulta a API do Mercado Pago para ver se existe um pagamento aprovado 
+    vinculado ao e-mail do usuário.
+    """
+    if not MP_ACCESS_TOKEN:
+        st.error("Token do Mercado Pago não configurado nos secrets.")
+        return False
+        
+    url = "https://api.mercadopago.com/v1/payments/search"
+    params = {
+        "payer.email": email_usuario,
+        "status": "approved"
+    }
+    headers = {
+        "Authorization": f"Bearer {MP_ACCESS_TOKEN}"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 200:
+            dados = response.json()
+            if dados.get("results"):
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao consultar Mercado Pago: {e}")
+        return False
+
+# --- 4. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
 def limpar_texto(txt):
     if not txt or txt is None:
         return ""
@@ -99,14 +128,14 @@ def montar_cabecalho_pdf(pdf):
 
     linha1 = ""
     if crt:  linha1 += f"Reg.: {crt}"
-    if tel:  linha1 += f"  |  Tel: {tel}"
+    if tel:  linha1 += f"  | Tel: {tel}"
     if linha1:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha1.strip(), align="C", ln=True)
 
     linha2 = ""
     if cnpj:   linha2 += f"CNPJ: {cnpj}"
-    if cidade: linha2 += f"  |  {cidade}"
+    if cidade: linha2 += f"  | {cidade}"
     if linha2:
         pdf.set_font("Arial", "", 9)
         pdf.cell(210, 6, linha2.strip(), align="C", ln=True)
@@ -120,15 +149,26 @@ def montar_cabecalho_pdf(pdf):
 
 def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
     try:
+        hoje = datetime.now()
+        validade = hoje + timedelta(days=7)
+        hoje_str = hoje.strftime('%d/%m/%Y %H:%M')
+        validade_str = validade.strftime('%d/%m/%Y')
+
         pdf = FPDF()
         pdf.add_page()
         montar_cabecalho_pdf(pdf)
 
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, f"RELATORIO: {limpar_texto(titulo)}", "B", 1, "L")
+        
+        # --- ADICIONADO VALIDADE ---
         pdf.set_font("Arial", "I", 8)
-        pdf.cell(0, 8, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "R")
-        pdf.ln(5)
+        pdf.cell(0, 5, f"Gerado em: {hoje_str}", 0, 1, "R")
+        pdf.set_text_color(255, 0, 0)
+        pdf.set_font("Arial", "BI", 8)
+        pdf.cell(0, 5, f"VÁLIDO ATÉ: {validade_str}", 0, 1, "R")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(3)
 
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", "B", 9)
@@ -162,6 +202,11 @@ def gerar_pdf_universal(titulo, df_dados, colunas_w, headers):
 
 def gerar_pdf_resultado_lumino(dados, perfil):
     try:
+        hoje = datetime.now()
+        validade = hoje + timedelta(days=7)
+        hoje_str = hoje.strftime('%d/%m/%Y')
+        validade_str = validade.strftime('%d/%m/%Y')
+
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)
@@ -169,11 +214,16 @@ def gerar_pdf_resultado_lumino(dados, perfil):
         empresa = limpar_texto(perfil.get('nome_empresa', 'VoltSpec Pro')) or 'VoltSpec Pro'
         titulo = f"{empresa} - Relatório Luminotécnico"
         pdf.cell(190, 10, titulo, ln=True, align='C')
-        pdf.ln(10)
+        pdf.ln(5)
         
         pdf.set_font("Arial", "", 12)
-        pdf.cell(190, 10, f"Responsável Técnico: {limpar_texto(perfil.get('crt', '---'))}", ln=True)
-        pdf.cell(190, 10, f"Local/Cidade: {limpar_texto(perfil.get('endereco', '---'))}", ln=True)
+        pdf.cell(190, 8, f"Responsável Técnico: {limpar_texto(perfil.get('crt', '---'))}", ln=True)
+        pdf.cell(190, 8, f"Local/Cidade: {limpar_texto(perfil.get('endereco', '---'))}", ln=True)
+        
+        # --- ADICIONADO VALIDADE ---
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(190, 6, f"Data do Cálculo: {hoje_str}  |  Válido até: {validade_str}", ln=True)
+        
         pdf.ln(5)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(10)
@@ -203,7 +253,7 @@ def gerar_pdf_resultado_lumino(dados, perfil):
         st.error(f"Erro ao gerar PDF luminotécnico: {e}")
         return None
 
-# --- 4. FUNÇÕES DE BANCO DE DADOS ---
+# --- 5. FUNÇÕES DE BANCO DE DADOS ---
 def carregar_perfil_supabase():
     try:
         if not st.session_state.get('user') or not hasattr(st.session_state.user, 'id'):
@@ -262,7 +312,7 @@ def formatar_data_iso(dt=None):
         dt = datetime.now(timezone.utc)
     return dt.isoformat()
 
-# --- 5. ESTADO INICIAL ---
+# --- 6. ESTADO INICIAL ---
 if 'logado' not in st.session_state:
     st.session_state.logado = False
 if 'user' not in st.session_state:
@@ -287,11 +337,10 @@ if 'resumo_materiais' not in st.session_state:
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
-        'data_cadastro': formatar_data_iso(),
-        'status_assinatura': 'trial'
+        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'trial'
     }
 
-# --- 6. TELA DE LOGIN ---
+# --- 7. TELA DE LOGIN ---
 if not st.session_state.logado:
     st.title("⚡ VoltSpec Pro")
     t1, t2 = st.tabs(["Login", "Criar Conta"])
@@ -331,7 +380,7 @@ if st.session_state.logado and not st.session_state.perfil_carregado:
     carregar_perfil_supabase()
     st.session_state.perfil_carregado = True
 
-# --- 7. SISTEMA PRINCIPAL E LÓGICA DE PAYWALL ---
+# --- 8. SISTEMA PRINCIPAL E LÓGICA DE PAYWALL ---
 def calcular_dias_uso():
     data_cad_str = st.session_state.perfil.get('data_cadastro', '')
     try:
@@ -403,55 +452,83 @@ if not tem_acesso:
         st.link_button("💳 Assinar Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
     
     st.write("---")
-    st.caption("Após o pagamento, atualize a página. O sistema será liberado automaticamente.")
-    st.stop() # <-- Isso impede que o resto do código (as abas) seja carregado!
+    
+    # --- BOTÃO DE VERIFICAÇÃO PARA QUEM ACABOU DE PAGAR ---
+    st.subheader("Já realizou o pagamento?")
+    st.write("Clique no botão abaixo para verificar no sistema e liberar seu acesso.")
+    if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
+        with st.spinner("Consultando Mercado Pago..."):
+            pago = verificar_pagamento_direto_mp(st.session_state.user.email)
+            if pago:
+                try:
+                    supabase.table("profiles").update({"status_assinatura": "ativo"}).eq("id", st.session_state.user.id).execute()
+                    st.session_state.perfil['status_assinatura'] = 'ativo'
+                    st.success("✅ Pagamento confirmado! Seu acesso VIP foi liberado.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao atualizar banco: {e}")
+            else:
+                st.warning("Nenhum pagamento aprovado encontrado para este e-mail ainda. Aguarde uns minutos ou verifique se usou o mesmo e-mail.")
+    
+    st.stop() # <-- Impede carregamento do resto das abas
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
 # --- MÓDULO PERFIL ---
 if aba == "⚙️ Perfil":
- st.header("⚙️ Configurações do Técnico")
-c1, c2 = st.columns(2)
-with c1:
+    st.header("⚙️ Configurações do Técnico")
+    c1, c2 = st.columns(2)
+    with c1:
         st.session_state.perfil['nome_empresa'] = st.text_input("Empresa:", value=st.session_state.perfil.get('nome_empresa', ''))
         st.session_state.perfil['crt']          = st.text_input("CRT/CFT:", value=st.session_state.perfil.get('crt', ''))
         st.session_state.perfil['telefone']     = st.text_input("WhatsApp:", value=st.session_state.perfil.get('telefone', ''))
-with c2:
+    with c2:
         st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
         st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
         st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
 
-if st.button("💾 Salvar na Nuvem"):
+    if st.button("💾 Salvar na Nuvem"):
         salvar_perfil_supabase()
 
-    # --- ÁREA DE UPGRADE COM VALORES EM DESTAQUE ---
-if st.session_state.perfil.get('status_assinatura') != 'ativo':
+    # --- ÁREA DE UPGRADE COM VALORES EM DESTAQUE E BOTÃO DE VERIFICAÇÃO ---
+    if st.session_state.perfil.get('status_assinatura') != 'ativo':
         st.divider()
         st.subheader("💎 Escolha seu Plano Premium")
-        st.write("Libere todos os módulos  e relatórios personalizados.")
+        st.write("Libere todos os módulos e relatórios personalizados.")
         
         c_up1, c_up2, c_up3 = st.columns(3)
-        
         with c_up1:
             st.info("**Plano Mensal**")
             st.markdown("### R$ 19,90")
             st.caption("Acesso total mês a mês")
             st.link_button("💳 Assinar Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
-            
         with c_up2:
             st.success("**Plano Trimestral**")
             st.markdown("### R$ 49,90")
             st.caption("Equivale a R$ 16,63/mês")
             st.link_button("💳 Assinar Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
-            
         with c_up3:
             st.warning("**Plano Anual**")
             st.markdown("### R$ 149,90")
             st.caption("Equivale a R$ 12,49/mês")
             st.link_button("💳 Assinar Anual", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
 
-        st.caption("⚠️ O acesso é liberado automaticamente após a confirmação do pagamento pelo Mercado Pago.")
+        st.divider()
+        st.write("Já realizou o pagamento? Clique abaixo para liberar seu acesso.")
+        if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="secondary"):
+            with st.spinner("Consultando Mercado Pago..."):
+                pago = verificar_pagamento_direto_mp(st.session_state.user.email)
+                if pago:
+                    try:
+                        supabase.table("profiles").update({"status_assinatura": "ativo"}).eq("id", st.session_state.user.id).execute()
+                        st.session_state.perfil['status_assinatura'] = 'ativo'
+                        st.success("✅ Pagamento confirmado! Seu acesso VIP foi liberado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao atualizar banco: {e}")
+                else:
+                    st.warning("Nenhum pagamento aprovado encontrado para este e-mail ainda. Aguarde alguns minutos ou tente novamente.")
 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
@@ -461,7 +538,7 @@ elif aba == "🏠 Cargas":
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             concessionaria = st.selectbox("Selecione a Concessionária:",
-                                          ["CEMIG (MG)", "CPFL (SP)", "ENEL (RJ/SP)", "EQUATORIAL", "Outra (Manual)"])
+                                           ["CEMIG (MG)", "CPFL (SP)", "ENEL (RJ/SP)", "EQUATORIAL", "Outra (Manual)"])
         with col_c2:
             tensao_fase = st.selectbox("Tensão Fase-Neutro (V):", [127, 220], index=0)
 
@@ -618,12 +695,22 @@ elif aba == "🏠 Cargas":
 
         if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
             try:
+                hoje = datetime.now()
+                validade = hoje + timedelta(days=7)
+                hoje_str = hoje.strftime('%d/%m/%Y %H:%M')
+                validade_str = validade.strftime('%d/%m/%Y')
+
                 pdf = FPDF()
                 pdf.add_page()
                 montar_cabecalho_pdf(pdf)
 
                 pdf.set_font("Arial", "I", 8)
-                pdf.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')} | Rede: {tensao_fase}V", 0, 1, "R")
+                pdf.cell(0, 6, f"Gerado em: {hoje_str} | Rede: {tensao_fase}V", 0, 1, "R")
+                # --- ADICIONADO VALIDADE NO MEMORIAL ---
+                pdf.set_text_color(255, 0, 0)
+                pdf.set_font("Arial", "BI", 8)
+                pdf.cell(0, 5, f"VÁLIDO ATÉ: {validade_str}", 0, 1, "R")
+                pdf.set_text_color(0, 0, 0)
                 pdf.ln(3)
 
                 pdf.set_font("Arial", "B", 12)
@@ -784,7 +871,7 @@ elif aba == "💰 Orçamentos":
         {"Descricao": "Ponto de Iluminacao",            "Qtd": 0, "Preco": 75.0},
         {"Descricao": "Montagem de Quadro (ate 12 disj.)",    "Qtd": 0, "Preco": 450.0},
         {"Descricao": "Montagem de Quadro (acima 12 disj.)",  "Qtd": 0, "Preco": 650.0},
-        {"Descricao": "Padrao CEMIG Monofasico",         "Qtd": 0, "Preco": 850.0},
+        {"Descricao": "Padrao CEMIG Monofasico",        "Qtd": 0, "Preco": 850.0},
         {"Descricao": "Padrao CEMIG Trifasico",          "Qtd": 0, "Preco": 1350.0},
         {"Descricao": "Instalacao de Chuveiro",          "Qtd": 0, "Preco": 110.0},
         {"Descricao": "Laudo de Conformidade",           "Qtd": 0, "Preco": 350.0}
@@ -834,10 +921,9 @@ elif aba == "📐 Dimensionador":
         tensao = st.selectbox("Tensão (V):", [127, 220])
         dist   = st.number_input("Distância do Quadro (m):", value=15.0, step=1.0)
     with col_inp3:
-        fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0,
-                                help="0.70 para 3 circuitos no mesmo conduíte")
+        fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0, help="0.70 para 3 circuitos no mesmo conduíte")
 
-    ib           = pot / tensao
+    ib = pot / tensao
     ib_corrigida = ib / fator_agrup
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
 
@@ -912,9 +998,9 @@ elif aba == "🛒 Produtos":
 st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
 with c_ft1:
-    st.caption(f"📍 {st.session_state.get('endereco', )}")
+    st.caption(f"📍 {st.session_state.perfil.get('endereco', '')}")
 with c_ft2:
-    st.caption("⚡ Desenvolvido por Spec Pro ")
+    st.caption("⚡ Desenvolvido por CLI Spec Pro")
 with c_ft3:
     if st.session_state.get('user'):
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
