@@ -485,40 +485,6 @@ if not tem_acesso:
     st.info("Após realizar o pagamento, atualize a página ou faça login novamente para liberar seu acesso automaticamente.")
     
     st.stop()
-    
-    # --- BOTÃO DE VERIFICAÇÃO PARA QUEM ACABOU DE PAGAR ---
-    st.subheader("Já realizou o pagamento?")
-    st.write("Clique no botão abaixo para verificar no sistema e liberar seu acesso.")
-if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True, key="btn_paywall"):
-            with st.spinner("A consultar o servidor do Mercado Pago..."):
-                pago, dias_adicionais = verificar_pagamento_direto_mp(st.session_state.user.email)
-                
-                if pago:
-                    try:
-                        # 1. Calcula a data exata
-                        nova_data = datetime.now(timezone.utc) + timedelta(days=dias_adicionais)
-                        nova_data_iso = nova_data.isoformat()
-                        
-                        # 2. Mostra o que vai ser gravado (Apenas para teste)
-                        st.write(f"DEBUG: Gravando {nova_data_iso} para o ID {st.session_state.user.id}")
-                        
-                        # 3. Executa a atualização no Supabase
-                        res = supabase.table("profiles").update({
-                            "status_assinatura": "ativo",
-                            "data_vencimento": nova_data_iso
-                        }).eq("id", st.session_state.user.id).execute()
-                        
-                        # 4. Atualiza a sessão local
-                        st.session_state.perfil['status_assinatura'] = 'ativo'
-                        st.session_state.perfil['data_vencimento'] = nova_data_iso
-                        
-                        st.success(f"✅ Acesso libertado por {dias_adicionais} dias!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao gravar no banco: {e}")
-                else:
-                    st.warning("Pagamento não encontrado. Verifique o e-mail ou aguarde o banco compensar.")
-                    st.stop() # <-- Impede carregamento do resto das abas
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
