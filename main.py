@@ -545,16 +545,20 @@ if aba == "⚙️ Perfil":
                 
                 if pago:
                     try:
-                        # Calcula a nova data de vencimento
+                        # 1. Calcula a nova data de vencimento
                         nova_data = datetime.now(timezone.utc) + timedelta(days=dias_adicionais)
                         nova_data_iso = nova_data.isoformat()
                         
-                        # Envia o status e a data limite para o Supabase
-                        supabase.table("profiles").update({
+                        # 2. Pega a conexão AUTENTICADA (O Crachá do Usuário)
+                        cliente = get_supabase_autenticado()
+                        
+                        # 3. Envia os dados usando o cliente autenticado
+                        cliente.table("profiles").update({
                             "status_assinatura": "ativo",
                             "data_vencimento": nova_data_iso
                         }).eq("id", st.session_state.user.id).execute()
                         
+                        # 4. Atualiza a memória do aplicativo
                         st.session_state.perfil['status_assinatura'] = 'ativo'
                         st.session_state.perfil['data_vencimento'] = nova_data_iso
                         
@@ -562,9 +566,6 @@ if aba == "⚙️ Perfil":
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao atualizar a base de dados: {e}")
-                else:
-                    st.warning("Nenhum pagamento encontrado para este e-mail ainda. Aguarde alguns minutos.")
-
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
     st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
