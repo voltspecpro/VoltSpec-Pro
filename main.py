@@ -9,9 +9,9 @@ import io
 
 # --- 0. CONSTANTES GLOBAIS ---
 LINKS_MERCADO_PAGO = {
-    "mensal": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=b62b015a0ef24a3ba1a0b4dc0a1ab7c5",
-    "trimestral": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=4bfc5cc33ac843a69dff563a0bdbad7b",
-    "anual": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=c1cc690cbf7b4a49a799008c2e4880d5"
+    "mensal": "https://mpago.la/1GddQRG",
+    "trimestral": "https://mpago.la/224N4Zw",
+    "anual": "https://mpago.la/2B9zSZz"
 }
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
