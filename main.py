@@ -538,27 +538,36 @@ if aba == "⚙️ Perfil":
                 
                 if pago:
                     try:
-                        # 1. Calcula a nova data de vencimento
+                        st.info("Passo 1: Encontrou o pagamento.")
+                        
+                        # Calcula a nova data de vencimento
                         nova_data = datetime.now(timezone.utc) + timedelta(days=dias_adicionais)
                         nova_data_iso = nova_data.isoformat()
+                        st.write(f"Passo 2: Data gerada -> `{nova_data_iso}`")
                         
-                        # 2. Usa a conexão AUTENTICADA para o Supabase
+                        # Conecta ao Supabase
                         cliente_auth = get_supabase_autenticado()
                         
-                        # 3. Envia o status e a data limite para o banco
-                        cliente_auth.table("profiles").update({
+                        # Envia os dados
+                        resposta = cliente_auth.table("profiles").update({
                             "status_assinatura": "ativo",
                             "data_vencimento": nova_data_iso
                         }).eq("id", st.session_state.user.id).execute()
                         
-                        # 4. Atualiza a sessão local do Streamlit
-                        st.session_state.perfil['status_assinatura'] = 'ativo'
-                        st.session_state.perfil['data_vencimento'] = nova_data_iso
-                        
-                        st.success(f"✅ Sucesso! Acesso liberado por {dias_adicionais} dias. Reiniciando o sistema...")
-                        st.rerun()
+                        # --- O RAIO-X DA RESPOSTA ---
+                        if len(resposta.data) == 0:
+                            st.error("🚨 O Supabase bloqueou a gravação silenciosamente! (Possível erro de Permissão RLS)")
+                            st.write("Dados da tentativa:", resposta)
+                        else:
+                            st.success("✅ O Supabase aceitou! A data foi gravada com sucesso.")
+                            st.write("Retorno do Banco de Dados:", resposta.data[0])
+                            
+                            # Atualiza a sessão
+                            st.session_state.perfil['status_assinatura'] = 'ativo'
+                            st.session_state.perfil['data_vencimento'] = nova_data_iso
+                            
                     except Exception as e:
-                        st.error(f"Erro ao atualizar a base de dados: {e}")
+                        st.error(f"❌ Ocorreu um erro no código Python ao tentar gravar: {e}")
                 else:
                     st.warning("Nenhum pagamento aprovado encontrado para este e-mail ainda.")
 # --- MÓDULO CARGAS ---
