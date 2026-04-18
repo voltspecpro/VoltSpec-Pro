@@ -72,7 +72,7 @@ def get_supabase_autenticado():
 # --- 3. NOVA FUNÇÃO: VERIFICAR MERCADO PAGO ---
 def verificar_pagamento_direto_mp(email_usuario):
     """
-    Consulta o Mercado Pago e devolve se foi pago e QUANTOS dias libertar.
+    Consulta o Mercado Pago e devolve (Status, Dias a libertar).
     """
     if not MP_ACCESS_TOKEN:
         return False, 0
@@ -80,7 +80,9 @@ def verificar_pagamento_direto_mp(email_usuario):
     url = "https://api.mercadopago.com/v1/payments/search"
     params = {
         "payer.email": email_usuario.strip(),
-        "status": "approved"
+        "status": "approved",
+        "sort": "date_created",
+        "criteria": "desc" # Pega sempre o pagamento mais recente
     }
     headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}"}
     
@@ -89,25 +91,19 @@ def verificar_pagamento_direto_mp(email_usuario):
         if response.status_code == 200:
             dados = response.json()
             if dados.get("results") and len(dados.get("results")) > 0:
-                # Pega no pagamento mais recente (o primeiro da lista)
                 ultimo_pagamento = dados["results"][0]
                 valor_pago = float(ultimo_pagamento.get("transaction_amount", 0))
                 
-                # A inteligência lógica do  Spec Pro
-                if valor_pago >= 149.00:
-                    dias_libertados = 365 # Plano Anual
-                elif valor_pago >= 49.00:
-                    dias_libertados = 90  # Plano Trimestral
-                elif valor_pago >= 19.00:
-                    dias_libertados = 30  # Plano Mensal
-                elif valor_pago == 1.00:
-                    dias_libertados = 1   # Teste de 1 real!
-                else:
-                    dias_libertados = 30  # Margem de segurança padrão
+                # Define os dias com base no valor do PIX/Cartão
+                if valor_pago >= 149.00:   dias = 365 # Anual
+                elif valor_pago >= 49.00: dias = 90  # Trimestral
+                elif valor_pago >= 19.00: dias = 30  # Mensal
+                elif valor_pago == 1.00:  dias = 1   # Teste Araxá
+                else:                     dias = 30
                     
-                return True, dias_libertados
+                return True, dias
         return False, 0
-    except Exception as e:
+    except Exception:
         return False, 0
 # --- 4. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
 def limpar_texto(txt):
@@ -466,21 +462,36 @@ if not tem_acesso:
     # --- BOTÃO DE VERIFICAÇÃO PARA QUEM ACABOU DE PAGAR ---
     st.subheader("Já realizou o pagamento?")
     st.write("Clique no botão abaixo para verificar no sistema e liberar seu acesso.")
-    if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
-        with st.spinner("Consultando Mercado Pago..."):
-            pago = verificar_pagamento_direto_mp(st.session_state.user.email)
-            if pago:
-                try:
-                    supabase.table("profiles").update({"status_assinatura": "ativo"}).eq("id", st.session_state.user.id).execute()
-                    st.session_state.perfil['status_assinatura'] = 'ativo'
-                    st.success("✅ Pagamento confirmado! Seu acesso VIP foi liberado.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao atualizar banco: {e}")
-            else:
-                st.warning("Nenhum pagamento aprovado encontrado para este e-mail ainda. Aguarde uns minutos ou verifique se usou o mesmo e-mail.")
-    
-    st.stop() # <-- Impede carregamento do resto das abas
+if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
+            with st.spinner("A consultar o servidor do Mercado Pago..."):
+                pago, dias_adicionais = verificar_pagamento_direto_mp(st.session_state.user.email)
+                
+                if pago:
+                    try:
+                        # 1. Calcula a data exata
+                        nova_data = datetime.now(timezone.utc) + timedelta(days=dias_adicionais)
+                        nova_data_iso = nova_data.isoformat()
+                        
+                        # 2. Mostra o que vai ser gravado (Apenas para teste)
+                        st.write(f"DEBUG: Gravando {nova_data_iso} para o ID {st.session_state.user.id}")
+                        
+                        # 3. Executa a atualização no Supabase
+                        res = supabase.table("profiles").update({
+                            "status_assinatura": "ativo",
+                            "data_vencimento": nova_data_iso
+                        }).eq("id", st.session_state.user.id).execute()
+                        
+                        # 4. Atualiza a sessão local
+                        st.session_state.perfil['status_assinatura'] = 'ativo'
+                        st.session_state.perfil['data_vencimento'] = nova_data_iso
+                        
+                        st.success(f"✅ Acesso libertado por {dias_adicionais} dias!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao gravar no banco: {e}")
+                else:
+                    st.warning("Pagamento não encontrado. Verifique o e-mail ou aguarde o banco compensar.")
+                    st.stop() # <-- Impede carregamento do resto das abas
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
