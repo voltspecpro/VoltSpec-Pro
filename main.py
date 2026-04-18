@@ -462,7 +462,7 @@ if not tem_acesso:
     # --- BOTÃO DE VERIFICAÇÃO PARA QUEM ACABOU DE PAGAR ---
     st.subheader("Já realizou o pagamento?")
     st.write("Clique no botão abaixo para verificar no sistema e liberar seu acesso.")
-if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
+if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True, key="btn_paywall"):
             with st.spinner("A consultar o servidor do Mercado Pago..."):
                 pago, dias_adicionais = verificar_pagamento_direto_mp(st.session_state.user.email)
                 
@@ -539,7 +539,7 @@ if aba == "⚙️ Perfil":
         st.write("Já realizou o pagamento? Clique abaixo para liberar seu acesso.")
         
         # CORREÇÃO DA INDENTAÇÃO AQUI NESTE BLOCO:
-        if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
+        if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True, key="btn_perfil"):
             with st.spinner("A consultar o servidor do Mercado Pago..."):
                 pago, dias_adicionais = verificar_pagamento_direto_mp(st.session_state.user.email)
                 
