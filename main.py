@@ -487,7 +487,7 @@ if not tem_acesso:
     st.stop()
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
-aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
+aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
 # --- MÓDULO PERFIL ---
 if aba == "⚙️ Perfil":
@@ -902,6 +902,268 @@ elif aba == "💡 Luminotecnica":
     except Exception as e:
         st.error(f"Erro ao preparar o PDF: {e}")
 
+        # --- MÓDULO CLIMATIZAÇÃO ---
+elif aba == "❄️ Climatização":
+    st.header("❄️ Dimensionamento de Ar-Condicionado (BTUs)")
+    st.info("Calcule a potência necessária para garantir o conforto térmico do ambiente.")
+
+    with st.expander("🏠 Características do Ambiente", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            area_clima = st.number_input("Área do Ambiente (m²):", min_value=1.0, value=12.0)
+            exposicao_sol = st.selectbox("Exposição ao Sol:", ["Manhã ou Sombra (600 BTUs/m²)", "Tarde ou Sol Forte (800 BTUs/m²)"])
+        with c2:
+            num_pessoas = st.number_input("Número de Pessoas (além de você):", min_value=0, value=1)
+            num_eletronicos = st.number_input("Número de Eletrônicos (TV, PC, etc):", min_value=0, value=1)
+
+    # Lógica do Cálculo
+    fator_area = 800 if "Sol Forte" in exposicao_sol else 600
+    btu_base = area_clima * fator_area
+    btu_pessoas = num_pessoas * 600
+    btu_aparelhos = num_eletronicos * 600
+    total_btus = btu_base + btu_pessoas + btu_aparelhos
+
+    # Sugestão de Aparelho Comercial
+    comerciais = [7000, 9000, 12000, 18000, 24000, 30000, 36000, 48000, 60000]
+    sugestao = comerciais[0]
+    for c in comerciais:
+        if c >= total_btus:
+            sugestao = c
+            break
+
+    st.divider()
+    res_c1, res_c2 = st.columns(2)
+    with res_c1:
+        st.metric("Cálculo Exato", f"{int(total_btus)} BTUs")
+    with res_c2:
+        st.metric("Aparelho Sugerido", f"{sugestao} BTUs", delta="Padrão Comercial")
+
+    # --- GERAÇÃO DE PDF CLIMATIZAÇÃO ---
+    if st.button("📄 Gerar Relatório de Climatização (PDF)", use_container_width=True):
+        try:
+            hoje = datetime.now()
+            validade = hoje + timedelta(days=7)
+            
+            pdf = FPDF()
+            pdf.add_page()
+            montar_cabecalho_pdf(pdf) # Usa o cabeçalho que já criamos com seus dados
+
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "RELATÓRIO DE DIMENSIONAMENTO TÉRMICO", "B", 1, "C")
+            
+            pdf.ln(5)
+            pdf.set_font("Arial", "I", 8)
+            pdf.cell(0, 5, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')}", 0, 1, "R")
+            pdf.set_text_color(255, 0, 0)
+            pdf.cell(0, 5, f"VÁLIDO ATÉ: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
+            pdf.set_text_color(0, 0, 0)
+
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "Dados de Entrada:", 0, 1, "L")
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 8, f"- Área Total: {area_clima} m2", 0, 1)
+            pdf.cell(0, 8, f"- Exposição Solar: {exposicao_sol}", 0, 1)
+            pdf.cell(0, 8, f"- Ocupantes Adicionais: {num_pessoas}", 0, 1)
+            pdf.cell(0, 8, f"- Equipamentos Eletrônicos: {num_eletronicos}", 0, 1)
+
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "Resultado do Dimensionamento:", 0, 1, "L")
+            pdf.set_fill_color(240, 240, 240)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(95, 10, "Carga Térmica Total", 1, 0, "C", True)
+            pdf.cell(95, 10, "Equipamento Recomendado", 1, 1, "C", True)
+            
+            pdf.set_font("Arial", "", 12)
+            pdf.cell(95, 12, f"{int(total_btus)} BTUs/h", 1, 0, "C")
+            pdf.cell(95, 12, f"{sugestao} BTUs/h", 1, 1, "C")
+
+            pdf.ln(10)
+            pdf.set_font("Arial", "I", 9)
+            pdf.multi_cell(0, 5, "Nota: Este cálculo é uma estimativa baseada em normas de conforto térmico. "
+                               "Para ambientes com grandes superfícies envidraçadas ou pé-direito duplo, "
+                               "consulte um engenheiro mecânico/climatização.")
+
+            pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
+            st.download_button("⬇️ Baixar Relatório de Climatização", pdf_output, "Relatorio_BTUs.pdf", "application/pdf", use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}")
+# --- MÓDULO ENERGIA SOLAR ---
+elif aba == "☀️ Energia Solar":
+    st.header("☀️ Estimativa Solar Fotovoltaica")
+    st.info("Gere uma estimativa rápida de investimento e economia para sistemas On-Grid.")
+
+    with st.expander("📊 Dados de Consumo e Local", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            consumo_kwh = st.number_input("Consumo Médio Mensal (kWh):", min_value=50.0, value=400.0, step=10.0)
+            tarifa_energia = st.number_input("Preço do kWh (com impostos - R$):", min_value=0.1, value=0.95, step=0.01)
+        with c2:
+            potencia_painel = st.selectbox("Potência do Painel (Watts):", [450, 550, 600, 650], index=1)
+            eficiencia_sistema = 0.80 # 20% de perdas
+
+    # Lógica do Cálculo Técnico
+    # Fórmula: Potência (kWp) = Consumo / (30 dias * HSP * Eficiência)
+    hsp_araxa = 5.2 
+    potencia_necessaria_kwp = consumo_kwh / (30 * hsp_araxa * eficiencia_sistema)
+    
+    # Quantidade de Painéis
+    qtd_paineis = math.ceil((potencia_necessaria_kwp * 1000) / potencia_painel)
+    potencia_real_instalada = (qtd_paineis * potencia_painel) / 1000
+    
+    # Estimativa de Área (Média de 2.6m² por painel de 550W)
+    area_estimada = qtd_paineis * 2.6
+
+    # Financeiro (Estimativa de mercado: R$ 3,80 por Wp instalado)
+    investimento_estimado = potencia_real_instalada * 1000 * 3.80
+    economia_mensal = consumo_kwh * tarifa_energia
+    payback_meses = investimento_estimado / economia_mensal if economia_mensal > 0 else 0
+
+    # Exibição dos Resultados
+    st.divider()
+    res1, res2, res3 = st.columns(3)
+    res1.metric("Painéis Necessários", f"{qtd_paineis} un")
+    res2.metric("Potência do Sistema", f"{potencia_real_instalada:.2f} kWp")
+    res3.metric("Área no Telhado", f"{area_estimada:.1f} m²")
+
+    fin1, fin2 = st.columns(2)
+    fin1.metric("Investimento Estimado", f"R$ {investimento_estimado:,.2/f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    fin2.metric("Payback (Retorno)", f"{math.ceil(payback_meses/12)} anos", f"{int(payback_meses)} meses")
+
+    # --- GERAÇÃO DE PDF SOLAR ---
+    if st.button("📄 Gerar Estudo de Viabilidade Solar (PDF)", use_container_width=True):
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            montar_cabecalho_pdf(pdf)
+
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "ESTUDO PRELIMINAR DE VIABILIDADE SOLAR", "B", 1, "C")
+            
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "1. Resumo do Dimensionamento", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 7, f"- Consumo Mensal Alvo: {consumo_kwh} kWh", 0, 1)
+            pdf.cell(0, 7, f"- Potência Geradora Recomendada: {potencia_real_instalada:.2f} kWp", 0, 1)
+            pdf.cell(0, 7, f"- Quantidade de Módulos ({potencia_painel}W): {qtd_paineis} unidades", 0, 1)
+            pdf.cell(0, 7, f"- Espaço Necessário em Telhado: {area_estimada:.1f} m2", 0, 1)
+
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "2. Análise Financeira Estimada", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 7, f"- Investimento Aproximado: R$ {investimento_estimado:,.2f}", 0, 1)
+            pdf.cell(0, 7, f"- Economia Mensal Estimada: R$ {economia_mensal:,.2f}", 0, 1)
+            pdf.cell(0, 7, f"- Tempo de Retorno (Payback): aprox. {math.ceil(payback_meses/12)} anos", 0, 1)
+
+            pdf.ln(10)
+            pdf.set_fill_color(230, 230, 230)
+            pdf.set_font("Arial", "I", 9)
+            pdf.multi_cell(0, 5, "AVISO: Este relatório é uma estimativa baseada na média de radiação solar da região (HSP 5.2). "
+                               "Os valores de investimento podem variar conforme a marca dos equipamentos, tipo de telhado e "
+                               "distância do quadro de energia. Requer visita técnica e projeto executivo.", 1, "J", True)
+
+            pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
+            st.download_button("⬇️ Baixar Estudo Solar", pdf_output, "Estudo_Solar_VoltSpec.pdf", "application/pdf", use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}")
+# --- MÓDULO SIMULADOR DE ECONOMIA ---
+elif aba == "📉 Economia":
+    st.header("📉 Simulador de Economia de Energia")
+    st.info("Mostre ao seu cliente quanto ele economiza ao modernizar as instalações.")
+
+    with st.expander("💡 Modernização de Iluminação", expanded=True):
+        col_ilum1, col_ilum2 = st.columns(2)
+        with col_ilum1:
+            tipo_antiga = st.selectbox("Tipo de Lâmpada Atual:", ["Incandescente (60W)", "Fluorescente (40W)"])
+            qtd_lampadas = st.number_input("Quantidade de Lâmpadas:", min_value=1, value=10)
+        with col_ilum2:
+            horas_uso = st.number_input("Horas de uso por dia:", min_value=1, max_value=24, value=6)
+            tarifa_simulada = st.number_input("Tarifa de Energia (R$/kWh):", value=0.95, key="tarifa_eco")
+
+    # Lógica Iluminação
+    watts_antiga = 60 if "Incandescente" in tipo_antiga else 40
+    watts_nova = 9 if "Incandescente" in tipo_antiga else 18
+    
+    consumo_mensal_antigo = (watts_antiga * qtd_lampadas * horas_uso * 30) / 1000
+    consumo_mensal_novo = (watts_nova * qtd_lampadas * horas_uso * 30) / 1000
+    economia_kwh_mes = consumo_mensal_antigo - consumo_mensal_novo
+    economia_rs_mes = economia_kwh_mes * tarifa_simulada
+
+    st.divider()
+    
+    with st.expander("❄️ Upgrade para Ar-Condicionado Inverter"):
+        col_ar1, col_ar2 = st.columns(2)
+        with col_ar1:
+            btu_ar = st.selectbox("Potência do Aparelho (BTUs):", [9000, 12000, 18000, 24000])
+            dias_uso_mes = st.slider("Dias de uso no mês:", 1, 30, 22)
+        with col_ar2:
+            horas_ar = st.slider("Horas por dia:", 1, 24, 8)
+    
+    # Lógica Ar-Condicionado (Estimativa média de consumo)
+    # Convencional consome aprox. 1.1kWh por 9000 BTUs (em regime). Inverter economiza 40%.
+    consumo_ref_hora = (btu_ar / 9000) * 1.0 # Base 1kWh para cada 9k BTUs
+    consumo_ar_conv = consumo_ref_hora * horas_ar * dias_uso_mes
+    economia_ar_rs = (consumo_ar_conv * 0.40) * tarifa_simulada # 40% de economia
+
+    # Resumo Geral
+    st.subheader("💰 Potencial de Economia Total")
+    total_eco_mes = economia_rs_mes + economia_ar_rs
+    total_eco_ano = total_eco_mes * 12
+
+    res_e1, res_e2 = st.columns(2)
+    res_e1.metric("Economia Mensal Estimada", f"R$ {total_eco_mes:.2f}")
+    res_e2.metric("Economia Anual Estimada", f"R$ {total_eco_ano:.2f}", delta="Redução de Custos")
+
+    # --- GERAÇÃO DE PDF ECONOMIA ---
+    if st.button("📄 Gerar Laudo de Economia (PDF)", use_container_width=True):
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            montar_cabecalho_pdf(pdf)
+
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "LAUDO TÉCNICO DE POTENCIAL DE ECONOMIA", "B", 1, "C")
+            
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "1. Modernização da Iluminação", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 7, f"- Troca de {qtd_lampadas} unidades de lâmpadas {tipo_antiga} por LED.", 0, 1)
+            pdf.cell(0, 7, f"- Redução mensal de consumo: {economia_kwh_mes:.2f} kWh", 0, 1)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, f"- Economia financeira em iluminação: R$ {economia_rs_mes:.2f}/mês", 0, 1)
+
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "2. Eficiência em Climatização (Inverter)", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 7, f"- Upgrade para tecnologia Inverter em aparelho de {btu_ar} BTUs.", 0, 1)
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, f"- Economia financeira em climatização: R$ {economia_ar_rs:.2f}/mês", 0, 1)
+
+            pdf.ln(10)
+            pdf.set_fill_color(0, 128, 0)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 12, f"ECONOMIA TOTAL ESTIMADA: R$ {total_eco_ano:.2f} POR ANO", 0, 1, "C", True)
+            
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(5)
+            pdf.set_font("Arial", "I", 9)
+            pdf.multi_cell(0, 5, "Nota: Este simulador utiliza médias de consumo baseadas em especificações técnicas de fabricantes. "
+                               "A economia real pode variar de acordo com a marca dos equipamentos e hábitos de uso.")
+
+            pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
+            st.download_button("⬇️ Baixar Laudo de Economia", pdf_output, "Laudo_Economia_VoltSpec.pdf", "application/pdf", use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}")
+
 # --- MÓDULO ORÇAMENTOS ---
 elif aba == "💰 Orçamentos":
     st.header("💰 Orçamentos de Serviços")
@@ -948,6 +1210,101 @@ elif aba == "📦 Materiais":
         pdf = gerar_pdf_universal("LISTA DE MATERIAIS", df_mat, [100, 20, 35, 35], ["Descricao", "Qtd", "Unit.", "Subtotal"])
         if pdf:
             st.download_button("⬇️ Baixar PDF", pdf, "Materiais.pdf", "application/pdf")
+            # --- MÓDULO QUEDA DE TENSÃO REAL ---
+elif aba == "⚡ Queda de Tensão":
+    st.header("⚡ Diagnóstico de Queda de Tensão (NBR 5410)")
+    st.info("Verifique se a fiação existente está perdendo energia e colocando os equipamentos em risco.")
+
+    with st.expander("🔌 Dados da Instalação", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            v_nominal = st.selectbox("Tensão Nominal (V):", [127, 220, 380, 440])
+            corrente_a = st.number_input("Corrente Medida/Carga (A):", min_value=0.1, value=10.0)
+            distancia_m = st.number_input("Distância do Cabo (metros):", min_value=1.0, value=20.0)
+        with c2:
+            secao_cabo = st.selectbox("Seção do Cabo Atual (mm²):", [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50])
+            material_cabo = st.radio("Material do Condutor:", ["Cobre", "Alumínio"], horizontal=True)
+            fase_sistema = st.radio("Tipo de Circuito:", ["Monofásico/Bifásico", "Trifásico"], horizontal=True)
+
+    # Lógica do Cálculo Técnico (Fórmula: DeltaV = (k * L * I * rho) / S)
+    # rho cobre = 0.0172 / rho aluminio = 0.0282
+    rho = 0.0172 if material_cabo == "Cobre" else 0.0282
+    k = 2 if fase_sistema == "Monofásico/Bifásico" else 1.732 # Fator de distância ida/volta ou trifásico
+    
+    queda_volts = (k * rho * distancia_m * corrente_a) / secao_cabo
+    queda_percentual = (queda_volts / v_nominal) * 100
+    v_final = v_nominal - queda_volts
+
+    # Critérios NBR 5410 (Geralmente 4% para circuitos terminais)
+    limite_norma = 4.0
+    esta_dentro = queda_percentual <= limite_norma
+
+    st.divider()
+    res1, res2, res3 = st.columns(3)
+    res1.metric("Queda em Volts", f"{queda_volts:.2f} V")
+    
+    # Cor do indicador de percentual
+    if esta_dentro:
+        res2.metric("Queda Percentual", f"{queda_percentual:.2f} %", "✅ Dentro da Norma", delta_color="normal")
+    else:
+        res2.metric("Queda Percentual", f"{queda_percentual:.2f} %", "⚠️ Fora da Norma", delta_color="inverse")
+        
+    res3.metric("Tensão na Carga", f"{v_final:.1f} V")
+
+    # Alerta Visual
+    if not esta_dentro:
+        st.warning(f"🚨 **Atenção:** A queda de tensão ultrapassou os {limite_norma}% recomendados pela NBR 5410. "
+                   "Isso causa aquecimento dos cabos, desperdício de energia e pode danificar motores e eletrônicos.")
+    else:
+        st.success("✅ A fiação está adequadamente dimensionada para esta distância e carga.")
+
+    # --- GERAÇÃO DE PDF DIAGNÓSTICO ---
+    if st.button("📄 Gerar Laudo de Conformidade Elétrica (PDF)", use_container_width=True):
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            montar_cabecalho_pdf(pdf)
+
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, "LAUDO TÉCNICO DE QUEDA DE TENSÃO", "B", 1, "C")
+            
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "1. Parâmetros Analisados", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 7, f"- Tensão de Origem: {v_nominal}V | Circuito: {fase_sistema}", 0, 1)
+            pdf.cell(0, 7, f"- Condutor: {secao_cabo}mm2 em {material_cabo}", 0, 1)
+            pdf.cell(0, 7, f"- Comprimento do Trecho: {distancia_m} metros", 0, 1)
+            pdf.cell(0, 7, f"- Corrente de Projeto: {corrente_a} A", 0, 1)
+
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 10, "2. Resultados do Diagnóstico", 0, 1)
+            pdf.set_font("Arial", "B", 12)
+            
+            status_texto = "CONFORME (DENTRO DA NORMA)" if esta_dentro else "NÃO CONFORME (FORA DA NORMA)"
+            pdf.cell(0, 10, f"STATUS: {status_texto}", 1, 1, "C")
+            
+            pdf.set_font("Arial", "", 10)
+            pdf.ln(2)
+            pdf.cell(0, 7, f"- Queda de Tensão Calculada: {queda_volts:.2f} V", 0, 1)
+            pdf.cell(0, 7, f"- Percentual de Perda: {queda_percentual:.2f}% (Limite NBR 5410: {limite_norma}%)", 0, 1)
+            pdf.cell(0, 7, f"- Tensão Final Disponível no Equipamento: {v_final:.1f} V", 0, 1)
+
+            if not esta_dentro:
+                pdf.ln(5)
+                pdf.set_text_color(200, 0, 0)
+                pdf.set_font("Arial", "B", 10)
+                pdf.multi_cell(0, 6, "RECOMENDAÇÃO TÉCNICA: É necessária a substituição dos condutores por uma seção superior "
+                                   "ou a redistribuição das cargas para reduzir a distância do circuito, visando evitar "
+                                   "sobreaquecimento e perda de eficiência energética.")
+            
+            pdf.set_text_color(0, 0, 0)
+            pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
+            st.download_button("⬇️ Baixar Laudo de Diagnóstico", pdf_output, "Laudo_Tecnico_Queda_Tensao.pdf", "application/pdf", use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}")
 
 # --- MÓDULO DIMENSIONADOR ---
 elif aba == "📐 Dimensionador":
