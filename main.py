@@ -72,33 +72,43 @@ def get_supabase_autenticado():
 # --- 3. NOVA FUNÇÃO: VERIFICAR MERCADO PAGO ---
 def verificar_pagamento_direto_mp(email_usuario):
     """
-    Consulta a API do Mercado Pago para ver se existe um pagamento aprovado 
-    vinculado ao e-mail do usuário.
+    Consulta o Mercado Pago e devolve se foi pago e QUANTOS dias libertar.
     """
     if not MP_ACCESS_TOKEN:
-        st.error("Token do Mercado Pago não configurado nos secrets.")
-        return False
+        return False, 0
         
     url = "https://api.mercadopago.com/v1/payments/search"
     params = {
-        "payer.email": email_usuario,
+        "payer.email": email_usuario.strip(),
         "status": "approved"
     }
-    headers = {
-        "Authorization": f"Bearer {MP_ACCESS_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}"}
     
     try:
         response = requests.get(url, headers=headers, params=params)
         if response.status_code == 200:
             dados = response.json()
-            if dados.get("results"):
-                return True
-        return False
+            if dados.get("results") and len(dados.get("results")) > 0:
+                # Pega no pagamento mais recente (o primeiro da lista)
+                ultimo_pagamento = dados["results"][0]
+                valor_pago = float(ultimo_pagamento.get("transaction_amount", 0))
+                
+                # A inteligência lógica do  Spec Pro
+                if valor_pago >= 149.00:
+                    dias_libertados = 365 # Plano Anual
+                elif valor_pago >= 49.00:
+                    dias_libertados = 90  # Plano Trimestral
+                elif valor_pago >= 19.00:
+                    dias_libertados = 30  # Plano Mensal
+                elif valor_pago == 1.00:
+                    dias_libertados = 1   # Teste de 1 real!
+                else:
+                    dias_libertados = 30  # Margem de segurança padrão
+                    
+                return True, dias_libertados
+        return False, 0
     except Exception as e:
-        st.error(f"Erro ao consultar Mercado Pago: {e}")
-        return False
-
+        return False, 0
 # --- 4. FUNÇÕES DE SUPORTE (PDF E LIMPEZA) ---
 def limpar_texto(txt):
     if not txt or txt is None:
@@ -516,19 +526,33 @@ if aba == "⚙️ Perfil":
 
         st.divider()
         st.write("Já realizou o pagamento? Clique abaixo para liberar seu acesso.")
-        if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="secondary"):
-            with st.spinner("Consultando Mercado Pago..."):
-                pago = verificar_pagamento_direto_mp(st.session_state.user.email)
+        
+        # CORREÇÃO DA INDENTAÇÃO AQUI NESTE BLOCO:
+        if st.button("🔄 Verificar Pagamento e Liberar Acesso", type="primary", use_container_width=True):
+            with st.spinner("A consultar o servidor do Mercado Pago..."):
+                pago, dias_adicionais = verificar_pagamento_direto_mp(st.session_state.user.email)
+                
                 if pago:
                     try:
-                        supabase.table("profiles").update({"status_assinatura": "ativo"}).eq("id", st.session_state.user.id).execute()
+                        # Calcula a nova data de vencimento
+                        nova_data = datetime.now(timezone.utc) + timedelta(days=dias_adicionais)
+                        nova_data_iso = nova_data.isoformat()
+                        
+                        # Envia o status e a data limite para o Supabase
+                        supabase.table("profiles").update({
+                            "status_assinatura": "ativo",
+                            "data_vencimento": nova_data_iso
+                        }).eq("id", st.session_state.user.id).execute()
+                        
                         st.session_state.perfil['status_assinatura'] = 'ativo'
-                        st.success("✅ Pagamento confirmado! Seu acesso VIP foi liberado.")
+                        st.session_state.perfil['data_vencimento'] = nova_data_iso
+                        
+                        st.success(f"✅ Sucesso! Acesso libertado por {dias_adicionais} dias. A recarregar o sistema...")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao atualizar banco: {e}")
+                        st.error(f"Erro ao atualizar a base de dados: {e}")
                 else:
-                    st.warning("Nenhum pagamento aprovado encontrado para este e-mail ainda. Aguarde alguns minutos ou tente novamente.")
+                    st.warning("Nenhum pagamento encontrado para este e-mail ainda. Aguarde alguns minutos.")
 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
@@ -1000,7 +1024,7 @@ c_ft1, c_ft2, c_ft3 = st.columns(3)
 with c_ft1:
     st.caption(f"📍 {st.session_state.perfil.get('endereco', '')}")
 with c_ft2:
-    st.caption("⚡ Desenvolvido por CLI Spec Pro")
+    st.caption("⚡ Desenvolvido por Spec Pro")
 with c_ft3:
     if st.session_state.get('user'):
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
