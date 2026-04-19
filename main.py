@@ -6,34 +6,7 @@ from datetime import datetime, timezone, timedelta
 from fpdf import FPDF
 from supabase import create_client, Client
 import io
-import streamlit as st
 
-# ==========================================
-# SISTEMA DE LOGIN - MEMBROS FUNDADORES
-# ==========================================
-senha_mestre = "Volt50Arax@" 
-
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    # Interface de Login
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("<h2 style='text-align: center; color: #facc15;'>⚡ VoltSpec Pro</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center;'>Acesso restrito para assinantes.</p>", unsafe_allow_html=True)
-        
-        st.divider()
-        input_senha = st.text_input("🔑 Chave de Acesso:", type="password", placeholder="Digite sua senha")
-        
-        if st.button("Acessar Painel", use_container_width=True):
-            if input_senha == senha_mestre:
-                st.session_state.autenticado = True
-                st.rerun() # Recarrega a página logado
-            else:
-                st.error("Chave incorreta. Acesse voltspecpro.com.br para adquirir sua assinatura.")
-    
-    st.stop()
 # --- 0. CONSTANTES GLOBAIS ---
 LINKS_MERCADO_PAGO = {
     "mensal": "https://mpago.la/1GddQRG",
