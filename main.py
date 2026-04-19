@@ -1319,7 +1319,7 @@ elif aba == "📐 Dimensionador":
 
     col_inp1, col_inp2, col_inp3 = st.columns(3)
     with col_inp1:
-        pot       = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
+        pot        = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
         tipo_carga = st.selectbox("Tipo de Carga:", ["Iluminação", "Tomadas (Geral/TUE)"])
     with col_inp2:
         tensao = st.selectbox("Tensão (V):", [127, 220])
@@ -1353,12 +1353,51 @@ elif aba == "📐 Dimensionador":
     with c_res3:
         st.metric("Bitola Final", f"{bitola_final} mm²")
 
+    # --- INÍCIO DA ADIÇÃO: DIMENSIONAMENTO DE ELETRODUTOS ---
+    st.subheader("🕳️ Ocupação do Eletroduto")
+    
+    # Valores de referência comerciais aproximados (em mm²)
+    area_cabos = {1.5: 6.0, 2.5: 7.5, 4.0: 11.0, 6.0: 14.5, 10.0: 22.5}
+    area_eletrodutos = {"20mm (1/2\")": 176, "25mm (3/4\")": 283, "32mm (1\")": 530, "40mm (1 1/4\")": 907}
+
+    col_el1, col_el2 = st.columns(2)
+    with col_el1:
+        qtd_condutores = st.number_input("Qtd. de Condutores no Trecho:", min_value=1, value=3, step=1, help="Ex: Fase + Neutro + Terra")
+    with col_el2:
+        eletroduto_escolhido = st.selectbox("Tamanho do Eletroduto:", list(area_eletrodutos.keys()))
+
+    # Lógica de cálculo
+    area_unitaria_cabo = area_cabos.get(bitola_final, bitola_final * 2.5) # Se a bitola passar de 10mm², usa um fator de segurança
+    area_total_cabos = area_unitaria_cabo * qtd_condutores
+    area_eletroduto = area_eletrodutos[eletroduto_escolhido]
+    
+    taxa_ocupacao = (area_total_cabos / area_eletroduto) * 100
+
+    # Definição dos limites da norma
+    if qtd_condutores == 1:
+        limite_ocupacao = 53
+    elif qtd_condutores == 2:
+        limite_ocupacao = 31
+    else:
+        limite_ocupacao = 40
+
+    # Feedback visual com barra de progresso no Streamlit
+    cor_barra = "green" if taxa_ocupacao <= limite_ocupacao else "red"
+    st.progress(min(taxa_ocupacao / 100, 1.0))
+    st.caption(f"Ocupação atual: **{taxa_ocupacao:.1f}%** | Limite NBR 5410: **{limite_ocupacao}%**")
+    # --- FIM DA ADIÇÃO ---
+
     st.subheader("🛡️ Verificação de Conformidade")
     erros, avisos = [], []
+    
     if bitola_sugerida < bitola_minima:
         avisos.append(f"A norma exige mínimo de {bitola_minima}mm² para {tipo_carga.lower()}.")
     if percentual_queda > 4.0:
         erros.append("Queda de tensão acima de 4% (Limite NBR 5410 para circuitos terminais).")
+        
+    # Integração do eletroduto na verificação de erros
+    if taxa_ocupacao > limite_ocupacao:
+        erros.append(f"Eletroduto superlotado! A taxa de {taxa_ocupacao:.1f}% ultrapassa o limite de {limite_ocupacao}% para {qtd_condutores} condutores.")
 
     disjuntor_sugerido = math.ceil(ib / 5) * 5
     if disjuntor_sugerido < 10:
@@ -1376,6 +1415,7 @@ elif aba == "📐 Dimensionador":
         - **Método de Instalação:** Condutos embutidos em alvenaria (B1).
         - **Resistividade (ρ):** 0.0172 Ω·mm²/m.
         - **Disjuntor Sugerido:** {disjuntor_sugerido}A (Curva B para iluminação, C para motores/TUE).
+        - **Eletroduto:** {eletroduto_escolhido} (Área ocupada: {area_total_cabos:.1f} mm² de {area_eletroduto} mm²).
         """)
 
 # --- MÓDULO PRODUTOS ---
