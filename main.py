@@ -130,24 +130,6 @@ if st.sidebar.button("Encerrar Sessão"):
     st.session_state.logado = False
     st.rerun()
 
-# Conteúdo das Abas (Exemplo Estrutural)
-if aba == "⚙️ Perfil":
-    st.header("⚙️ Configurações do Perfil")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.session_state.perfil['nome_empresa'] = st.text_input("Nome da Empresa", value=st.session_state.perfil['nome_empresa'])
-        st.session_state.perfil['crt'] = st.text_input("CRT/CFT", value=st.session_state.perfil['crt'])
-    with c2:
-        st.session_state.perfil['cnpj'] = st.text_input("CNPJ", value=st.session_state.perfil['cnpj'])
-        st.session_state.perfil['email_contato'] = st.text_input("E-mail de Contato", value=st.session_state.perfil['email_contato'])
-    
-    if st.button("Salvar Alterações"):
-        st.success("Perfil atualizado com sucesso!")
-
-else:
-    st.write(f"Você está acessando o módulo: **{aba}**")
-    st.info("O conteúdo deste módulo está pronto para uso.")
-
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
