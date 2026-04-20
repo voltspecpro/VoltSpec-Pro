@@ -38,43 +38,6 @@ def init_connection():
 
 supabase = init_connection()
 
-# --- 3. FUNÇÃO DE SEGURANÇA (A TRANCA REAL) ---
-def verificar_acesso_assinante(email_usuario):
-    """
-    Verifica se o e-mail está na tabela 'assinaturas' com status 'ativo' 
-    e data de vencimento válida. Remove o trial automático.
-    """
-    try:
-        if not supabase: return False, "Erro de conexão com o banco de dados."
-        
-        # Busca os dados na tabela de assinaturas (criada via SQL Editor)
-        res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
-        
-        # Se não existe registro, o acesso é negado por padrão
-        if not res.data:
-            return False, "E-mail não autorizado. Realize a assinatura no site."
-            
-        dados = res.data[0]
-        status = dados.get("status", "pendente")
-        vencimento_str = dados.get("vencimento")
-
-        # Validação de Status
-        if status != "ativo":
-            return False, "Sua conta está com acesso PENDENTE de liberação."
-
-        # Validação de Data de Vencimento
-        if not vencimento_str:
-            return False, "Data de validade não encontrada para este usuário."
-
-        vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d").date()
-        hoje = datetime.now().date()
-        
-        if vencimento < hoje:
-            return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
-
-        return True, "Acesso Liberado"
-    except Exception as e:
-        return False, f"Erro na verificação de segurança: {str(e)}"
 
 # --- 4. TELA DE LOGIN ---
 if 'logado' not in st.session_state:
@@ -109,7 +72,7 @@ if not st.session_state.logado:
 
 # --- 5. O SEGURANÇA (BLOQUEIO PÓS-LOGIN) ---
 if st.session_state.logado:
-    permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
+    permitido, msg = "verificar_acesso_assinante"(st.session_state.user.email)
     
     if not permitido:
         st.warning(f"🔒 {msg}")
