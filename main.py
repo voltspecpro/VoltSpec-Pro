@@ -128,53 +128,6 @@ if st.sidebar.button("Encerrar Sessão"):
     st.session_state.logado = False
     st.rerun()
 
-# Navegação entre as ferramentas
-aba = st.radio("Selecione a ferramenta:", 
-    ["🏠 Cargas", "📐 Dimensionador", "⚡ Queda de Tensão", "💡 Lumino", "☀️ Solar", "⚙️ Perfil"], 
-    horizontal=True)
-
-if aba == "🏠 Cargas":
-    st.header("📋 Quadro de Cargas (NBR 5410)")
-    # O editor usa os dados inicializados, evitando o AttributeError
-    df_editor = st.data_editor(st.session_state.dados_cargas, num_rows="dynamic", use_container_width=True)
-    
-    if st.button("💾 Salvar Alterações"):
-        st.session_state.dados_cargas = df_editor
-        st.success("Dados salvos no projeto!")
-
-elif aba == "⚡ Queda de Tensão":
-    st.header("⚡ Cálculo de Queda de Tensão")
-    c1, c2 = st.columns(2)
-    with c1:
-        v = st.selectbox("Tensão (V)", [127, 220, 380])
-        dist = st.number_input("Distância (m)", value=20.0)
-    with c2:
-        amp = st.number_input("Corrente (A)", value=10.0)
-        cabo = st.selectbox("Cabo (mm²)", [1.5, 2.5, 4, 6, 10, 16])
-    
-    queda = (2 * 0.0172 * dist * amp) / cabo
-    perc = (queda / v) * 100
-    st.metric("Resultado da Queda", f"{perc:.2f}%", delta=f"{queda:.2f}V", delta_color="inverse" if perc > 4 else "normal")
-
-elif aba == "⚙️ Perfil":
-    st.header("⚙️ Dados do Profissional")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.session_state.perfil['nome_empresa'] = st.text_input("Empresa", value=st.session_state.perfil['nome_empresa'])
-        st.session_state.perfil['crt'] = st.text_input("CRT/CFT", value=st.session_state.perfil['crt'])
-    with c2:
-        st.session_state.perfil['cnpj'] = st.text_input("CNPJ", value=st.session_state.perfil['cnpj'])
-        st.session_state.perfil['email_contato'] = st.text_input("E-mail de Contato", value=st.session_state.perfil['email_contato'])
-    
-    if st.button("Salvar Perfil"):
-        st.success("Configurações salvas!")
-
-else:
-    st.info(f"O módulo **{aba}** está disponível para uso profissional.")
-
-st.markdown("---")
-st.caption("VoltSpec Pro v3.0 | Excelência técnica em cada cálculo.")
-
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
