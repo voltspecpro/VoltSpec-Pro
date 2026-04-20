@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
+from fpdf import FPDF
 from supabase import create_client, Client
 import io
+import unicodedata
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (ESTÉTICA CLARA) ---
 st.set_page_config(
@@ -13,121 +15,121 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilo CSS para uma interface branca e profissional
+# Estilo para manter a interface branca e abas limpas
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stApp { background-color: #ffffff; color: #1e293b; }
-    .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; }
-    .stTextInput>div>div>input { border-radius: 8px; }
-    [data-testid="stHeader"] {background: rgba(0,0,0,0);}
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f1f5f9;
+        border-radius: 5px 5px 0px 0px;
+        padding: 10px 20px;
+        font-weight: bold;
+    }
+    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; color: white !important; }
+    .stButton>button { border-radius: 8px; font-weight: bold; height: 3em; width: 100%; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONEXÃO COM BANCO (SUPABASE) ---
+# --- 2. FUNÇÕES AUXILIARES (PDF E TRATAMENTO) ---
+def limpar_texto(texto):
+    if not texto: return ""
+    return "".join(ch for ch in unicodedata.normalize('NFKD', str(texto)) 
+                   if unicodedata.category(ch) != 'Mn').encode('ascii', 'ignore').decode('ascii')
+
+def montar_cabecalho_pdf(pdf, perfil):
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "VOLTSPEC PRO - MEMORIAL TECNICO", 0, 1, "C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 5, f"Empresa: {perfil.get('empresa', 'N/A')}", 0, 1, "L")
+    pdf.cell(0, 5, f"Responsavel: {perfil.get('nome', 'N/A')} | CRT: {perfil.get('crt', 'N/A')}", 0, 1, "L")
+    pdf.line(10, 32, 200, 32)
+    pdf.ln(10)
+
+# --- 3. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = st.secrets.get("SUPABASE_URL", "")
 KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
 
 @st.cache_resource
 def init_connection():
-    try:
-        return create_client(URL_SUPA, KEY_SUPA)
-    except:
-        return None
+    try: return create_client(URL_SUPA, KEY_SUPA)
+    except: return None
 
 supabase = init_connection()
 
-# --- 3. FUNÇÃO DE SEGURANÇA ---
 def verificar_acesso_assinante(email_usuario):
     try:
-        if not supabase: return False, "Erro de conexão com o banco."
+        if not supabase: return False, "Erro de conexão."
         res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
-        
-        if not res.data:
-            return False, "Acesso não identificado. Verifique sua conta no site oficial."
-            
-        dados = res.data[0]
-        if dados.get("status") != "ativo":
-            return False, "Seu acesso está aguardando ativação administrativa."
+        if not res.data: return False, "E-mail não autorizado."
+        if res.data[0].get("status") != "ativo": return False, "Acesso pendente."
+        return True, "Liberado"
+    except: return False, "Erro na verificação."
 
-        venc_str = dados.get("vencimento")
-        if venc_str:
-            vencimento = datetime.strptime(venc_str, "%Y-%m-%d").date()
-            if vencimento < datetime.now().date():
-                return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
-
-        return True, "Acesso Liberado"
-    except Exception as e:
-        return False, f"Erro na verificação: {str(e)}"
-
-# --- 4. INTERFACE DE AUTENTICAÇÃO (LOGIN/CADASTRO) ---
-if 'logado' not in st.session_state:
-    st.session_state.logado = False
+# --- 4. LOGIN E SEGURANÇA ---
+if 'logado' not in st.session_state: st.session_state.logado = False
 
 if not st.session_state.logado:
-    _, col_login, _ = st.columns([1, 2, 1])
-    with col_login:
-        st.markdown("<h1 style='text-align: center;'>⚡ VoltSpec Pro</h1>", unsafe_allow_html=True)
-        t1, t2 = st.tabs(["Acessar Conta", "Criar Nova Conta"])
-        
-        with t1:
-            em = st.text_input("E-mail profissional", key="l_email")
-            pw = st.text_input("Sua senha", type="password", key="l_pw")
-            if st.button("Entrar no Sistema"):
+    _, col, _ = st.columns([1, 1.5, 1])
+    with col:
+        st.title("⚡ VoltSpec Pro")
+        t_auth = st.tabs(["Entrar", "Criar Conta"])
+        with t_auth[0]:
+            em = st.text_input("E-mail")
+            pw = st.text_input("Senha", type="password")
+            if st.button("Acessar Sistema"):
                 try:
                     res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
                     if res.user:
                         st.session_state.user = res.user
                         st.session_state.logado = True
                         st.rerun()
-                except:
-                    st.error("Dados de acesso incorretos.")
-        
-        with t2:
-            st.info("O acesso às ferramentas será liberado após a validação do cadastro no site.")
-            nem = st.text_input("Melhor e-mail para contato", key="r_email")
-            npw = st.text_input("Crie uma senha segura", type="password", key="r_pw")
-            if st.button("Finalizar Cadastro"):
+                except: st.error("Erro no login.")
+        with t_auth[1]:
+            nem = st.text_input("Novo E-mail")
+            npw = st.text_input("Nova Senha", type="password")
+            if st.button("Registar"):
                 try:
                     supabase.auth.sign_up({"email": nem, "password": npw})
-                    st.success("Conta criada! Verifique seu e-mail e aguarde a liberação.")
-                except Exception as e:
-                    st.error(f"Erro ao cadastrar: {e}")
+                    st.success("Verifique o seu e-mail!")
+                except: st.error("Erro ao criar conta.")
     st.stop()
 
-# --- 5. VERIFICAÇÃO DE ASSINATURA ---
+# Bloqueio de Assinatura
 permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
 if not permitido:
     st.warning(f"🔒 {msg}")
-    if st.button("Sair da Conta"):
+    if st.button("Sair"):
         st.session_state.logado = False
         st.rerun()
     st.stop()
 
-# --- 6. INICIALIZAÇÃO DE DADOS (PREVINE ERROS) ---
+# --- 5. INICIALIZAÇÃO DE VARIÁVEIS ---
+if 'perfil' not in st.session_state:
+    st.session_state.perfil = {'nome': '', 'crt': '', 'empresa': '', 'cnpj': ''}
+
 if 'dados_cargas' not in st.session_state:
     st.session_state.dados_cargas = pd.DataFrame({
         "Comodo": ["Sala", "Cozinha", "Banheiro"],
         "Area (m2)": [15.0, 10.0, 4.5],
         "Perimetro (m)": [16.0, 13.0, 9.0],
-        "Iluminacao (VA)": ["160VA", "160VA", "100VA"],
-        "TUG (Qtd)": [3, 3, 1],
-        "Potencia TUG (VA)": [300.0, 1300.0, 600.0],
+        "Iluminacao (VA)": ["-", "-", "-"],
+        "TUG (Qtd)": [0, 0, 0],
+        "Potencia TUG (VA)": [0.0, 0.0, 0.0],
         "TUE (Watts)": [0.0, 0.0, 5500.0]
     })
 
-if 'perfil' not in st.session_state:
-    st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''}
+if 'lista_circuitos' not in st.session_state: st.session_state.lista_circuitos = []
+if 'resumo_materiais' not in st.session_state: st.session_state.resumo_materiais = []
 
-# --- 7. SISTEMA PRINCIPAL ---
+# --- 6. ESTRUTURA DE ABAS INDEPENDENTES ---
 st.sidebar.title("VoltSpec Pro ⚡")
-st.sidebar.caption(f"Logado: {st.session_state.user.email}")
-if st.sidebar.button("Encerrar Sessão"):
+if st.sidebar.button("Terminar Sessão"):
     st.session_state.logado = False
     st.rerun()
-
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
