@@ -345,7 +345,42 @@ if 'perfil' not in st.session_state:
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
         'data_cadastro': formatar_data_iso(), 'status_assinatura': 'trial'
     }
+def verificar_assinatura_rigorosa(email_usuario):
+    """
+    Verifica na tabela 'assinaturas' se o usuário tem permissão para entrar.
+    """
+    try:
+        if not supabase: return False, "Erro de conexão com o banco."
+        
+        # Busca os dados do usuário na tabela de assinaturas
+        res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
+        
+        # Se não existe na tabela, está trancado
+        if not res.data:
+            return False, "Usuário sem assinatura vinculada. Envie o comprovante via WhatsApp."
+            
+        dados = res.data[0]
+        status = dados.get("status", "pendente")
+        vencimento_str = dados.get("vencimento") # Formato esperado: YYYY-MM-DD
 
+        # Validação 1: Status precisa ser ativo
+        if status != "ativo":
+            return False, "Sua assinatura está com status PENDENTE."
+
+        # Validação 2: Precisa ter uma data de vencimento
+        if not vencimento_str:
+            return False, "Data de vencimento não definida no sistema."
+
+        # Validação 3: A data precisa ser maior ou igual a hoje
+        vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d").date()
+        hoje = datetime.now().date()
+        
+        if vencimento < hoje:
+            return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
+
+        return True, "Acesso Liberado"
+    except Exception as e:
+        return False, f"Erro técnico na verificação: {str(e)}"
 # --- 7. TELA DE LOGIN ---
 if not st.session_state.logado:
     st.title("⚡ VoltSpec Pro")
@@ -418,28 +453,11 @@ if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
     }
     st.rerun()
 
-# --- WIDGET PREMIUM SEMPRE VISÍVEL NO TRIAL ---
-if status_ass != 'ativo':
-    st.sidebar.divider()
-    dias_restantes = max(0, 7 - dias_de_uso)
-    
-    if dias_restantes > 0:
-        st.sidebar.info(f"⏳ **Período de Teste:** Restam {dias_restantes} dias.")
-    else:
-        st.sidebar.error("🔒 Seu período de teste expirou!")
-        
-    with st.sidebar.expander("💎 Fazer Upgrade Agora", expanded=True):
-        st.write("Gere relatórios ilimitados e salve seus cálculos na nuvem.")
-        st.link_button("Assinar Mensal", LINKS_MERCADO_PAGO["mensal"], use_container_width=True)
-        st.link_button("Assinar Trimestral", LINKS_MERCADO_PAGO["trimestral"], type="primary", use_container_width=True)
-        st.link_button("Assinar Anual (Melhor Valor)", LINKS_MERCADO_PAGO["anual"], use_container_width=True)
-    st.sidebar.divider()
-
 # --- BLOQUEIO TOTAL DA TELA CENTRAL (TELA DE PAGAMENTO) ---
 if not tem_acesso:
     st.error("🔒 Acesso Bloqueado")
     st.title("Assine o VoltSpec Pro")
-    st.write("Seus 7 dias gratuitos chegaram ao fim. Para continuar usando o melhor sistema de dimensionamento elétrico, ative sua assinatura.")
+  
     
     st.markdown("### 💎 Benefícios do Plano Profissional")
     st.write("- Dimensionamento NBR 5410 ilimitado")
@@ -462,9 +480,7 @@ if not tem_acesso:
     # --- BLOQUEIO TOTAL DA TELA CENTRAL (TELA DE PAGAMENTO) ---
 if not tem_acesso:
     st.error("🔒 Acesso Bloqueado")
-    st.title("Assine o VoltSpec Pro")
-    st.write("Seus 7 dias gratuitos chegaram ao fim. Para continuar usando o melhor sistema de dimensionamento elétrico, ative sua assinatura.")
-    
+    st.title("Assine o VoltSpec Pro")    
     st.markdown("### 💎 Benefícios do Plano Profissional")
     st.write("- Dimensionamento NBR 5410 ilimitado")
     st.write("- Relatórios Luminotécnicos detalhados")
