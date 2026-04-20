@@ -449,7 +449,7 @@ if st.sidebar.button("🚪 Sair da Conta", key="btn_sair_logoff"):
     st.session_state.perfil_carregado = False
     st.session_state.perfil = {
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
-        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'trial'
+        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'pendente'
     }
     st.rerun()
 
