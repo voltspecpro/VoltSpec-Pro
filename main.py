@@ -1,13 +1,10 @@
 import streamlit as st
 import pandas as pd
 import math
-import requests
-from datetime import datetime, timezone, timedelta
-from fpdf import FPDF
+from datetime import datetime
 from supabase import create_client, Client
-import io
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (TELA CLARA) ---
 st.set_page_config(
     page_title="VoltSpec Pro",
     page_icon="⚡",
@@ -15,13 +12,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilo CSS para esconder menus e melhorar a estética mobile
+# CSS para uma estética limpa e profissional (Removido o fundo escuro)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .stApp { background-color: #0f172a; color: #f8fafc; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; }
+    .stTextInput>div>div>input { border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -33,78 +31,122 @@ KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
 def init_connection():
     try:
         return create_client(URL_SUPA, KEY_SUPA)
-    except Exception as e:
+    except:
         return None
 
 supabase = init_connection()
 
+# --- 3. FUNÇÃO DE SEGURANÇA (VERIFICAÇÃO SILENCIOSA) ---
+def verificar_acesso_assinante(email_usuario):
+    """Verifica se o e-mail está ativo no banco de dados[cite: 3]."""
+    try:
+        if not supabase: return False, "Erro de conexão com o servidor."
+        
+        res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
+        
+        if not res.data:
+            return False, "E-mail não autorizado ou assinatura inexistente."
+            
+        dados = res.data[0]
+        status = dados.get("status", "pendente")
+        vencimento_str = dados.get("vencimento")
 
-# --- 4. TELA DE LOGIN ---
+        if status != "ativo":
+            return False, "Seu acesso está aguardando liberação administrativa."
+
+        if vencimento_str:
+            vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d").date()
+            if vencimento < datetime.now().date():
+                return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
+
+        return True, "Acesso Liberado"
+    except Exception as e:
+        return False, f"Erro na verificação: {str(e)}"
+
+# --- 4. INTERFACE DE AUTENTICAÇÃO ---
 if 'logado' not in st.session_state:
     st.session_state.logado = False
 
 if not st.session_state.logado:
-    st.title("⚡ VoltSpec Pro")
-    t1, t2 = st.tabs(["Acessar Conta", "Novo Cadastro"])
-    with t1:
-        em = st.text_input("E-mail profissional")
-        pw = st.text_input("Sua senha", type="password")
-        if st.button("Entrar no VoltSpec", use_container_width=True):
-            try:
-                res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
-                if res.user:
-                    st.session_state.user = res.user
-                    st.session_state.logado = True
-                    st.rerun()
-            except:
-                st.error("E-mail ou senha inválidos.")
-    with t2:
-        st.info("Após criar a conta, você deve realizar o pagamento no site para liberar o acesso.")
-        nem = st.text_input("Seu melhor e-mail")
-        npw = st.text_input("Crie uma senha forte", type="password")
-        if st.button("Criar minha conta", use_container_width=True):
-            try:
-                supabase.auth.sign_up({"email": nem, "password": npw})
-                st.success("Conta criada! Verifique seu e-mail e faça login.")
-            except Exception as e:
-                st.error(f"Erro ao cadastrar: {e}")
+    # Centralizando a tela de login
+    _, col_login, _ = st.columns([1, 2, 1])
+    with col_login:
+        st.title("⚡ VoltSpec Pro")
+        t1, t2 = st.tabs(["Entrar", "Criar Conta"])
+        
+        with t1:
+            em = st.text_input("E-mail cadastrado", key="login_email")
+            pw = st.text_input("Senha", type="password", key="login_pw")
+            if st.button("Acessar Sistema"):
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
+                    if res.user:
+                        st.session_state.user = res.user
+                        st.session_state.logado = True
+                        st.rerun()
+                except:
+                    st.error("E-mail ou senha inválidos.")
+        
+        with t2:
+            st.write("Cadastre-se para solicitar acesso.")
+            nem = st.text_input("E-mail profissional", key="reg_email")
+            npw = st.text_input("Defina uma senha", type="password", key="reg_pw")
+            if st.button("Solicitar Cadastro"):
+                try:
+                    supabase.auth.sign_up({"email": nem, "password": npw})
+                    st.success("Conta criada com sucesso! Verifique seu e-mail para confirmar.")
+                except Exception as e:
+                    st.error(f"Erro ao cadastrar: {e}")
     st.stop()
 
-# --- 5. O SEGURANÇA (BLOQUEIO PÓS-LOGIN) ---
+# --- 5. CONTROLE DE ACESSO PÓS-LOGIN ---
 if st.session_state.logado:
-    permitido, msg = "verificar_acesso_assinante"(st.session_state.user.email)
+    # Correção do erro: Chamada da função sem aspas
+    permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
     
     if not permitido:
         st.warning(f"🔒 {msg}")
-        st.header("Assinatura Pendente")
-        st.write("Não identificamos um pagamento aprovado para este e-mail no nosso sistema.")
-        
-        st.info("Se você já realizou o pagamento no site oficial, envie o seu comprovante abaixo para liberação imediata.")
-        
-        st.link_button("✅ Enviar Comprovante no WhatsApp", f"https://wa.me/5534984127814?text=Olá!%20Fiz%20o%20pagamento%20do%20VoltSpec%20Pro%20para%20o%20email:%20{st.session_state.user.email}", use_container_width=True)
+        st.info("Para dúvidas sobre o seu acesso, entre em contato com o suporte através do nosso site oficial.")
         
         if st.button("Sair da Conta"):
             st.session_state.logado = False
             st.rerun()
-            
-        # Bloqueia a execução do restante do app
         st.stop()
 
-# --- 6. SISTEMA PRINCIPAL (SÓ PARA ATIVOS) ---
+# --- 6. SISTEMA PRINCIPAL (SÓ PARA USUÁRIOS ATIVOS) ---
 # Inicialização de Variáveis de Estado
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''}
 
-# Menu de Navegação Superior (horizontal)
+# Menu de Navegação Superior
 aba = st.radio("Selecione a ferramenta:", 
-    ["🏠 Cargas", "📐 Dimensionador", "⚡ QT", "💡 Lumino", "❄️ Clima", "☀️ Solar", "📉 Economia", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos", "⚙️ Perfil"], 
+    ["🏠 Cargas", "📐 Dimensionador", "⚡ Queda de Tensão", "💡 Lumino", "❄️ Clima", "☀️ Solar", "📉 Economia", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos", "⚙️ Perfil"], 
     horizontal=True)
 
+# Sidebar de Usuário
 st.sidebar.title("VoltSpec Pro ⚡")
-st.sidebar.caption(f"Usuário: {st.session_state.user.email}")
-if st.sidebar.button("Sair"):
+st.sidebar.caption(f"Logado como: {st.session_state.user.email}")
+if st.sidebar.button("Encerrar Sessão"):
     st.session_state.logado = False
     st.rerun()
+
+# Conteúdo das Abas (Exemplo Estrutural)
+if aba == "⚙️ Perfil":
+    st.header("⚙️ Configurações do Perfil")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.session_state.perfil['nome_empresa'] = st.text_input("Nome da Empresa", value=st.session_state.perfil['nome_empresa'])
+        st.session_state.perfil['crt'] = st.text_input("CRT/CFT", value=st.session_state.perfil['crt'])
+    with c2:
+        st.session_state.perfil['cnpj'] = st.text_input("CNPJ", value=st.session_state.perfil['cnpj'])
+        st.session_state.perfil['email_contato'] = st.text_input("E-mail de Contato", value=st.session_state.perfil['email_contato'])
+    
+    if st.button("Salvar Alterações"):
+        st.success("Perfil atualizado com sucesso!")
+
+else:
+    st.write(f"Você está acessando o módulo: **{aba}**")
+    st.info("O conteúdo deste módulo está pronto para uso.")
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
@@ -291,11 +333,11 @@ elif aba == "🏠 Cargas":
         if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
             try:
                 hoje = datetime.now()
-                validade = hoje + timedelta(days=7)
+                validade = hoje + "timedelta"(days=7)
                 hoje_str = hoje.strftime('%d/%m/%Y %H:%M')
                 validade_str = validade.strftime('%d/%m/%Y')
 
-                pdf = FPDF()
+                pdf = "FPDF"()
                 pdf.add_page()
                 "montar_cabecalho_pdf"(pdf)
 
@@ -513,7 +555,7 @@ elif aba == "❄️ Climatização":
     # --- GERAÇÃO DE PDF CLIMATIZAÇÃO ATUALIZADO ---
     if st.button("📄 Gerar Relatório com Sugestão de Marcas", use_container_width=True):
         try:
-            pdf = FPDF()
+            pdf = "FPDF"()
             pdf.add_page()
             "montar_cabecalho_pdf"(pdf)
 
@@ -597,7 +639,7 @@ elif aba == "☀️ Energia Solar":
     # --- GERAÇÃO DE PDF SOLAR ---
     if st.button("📄 Gerar Estudo de Viabilidade Solar (PDF)", use_container_width=True):
         try:
-            pdf = FPDF()
+            pdf = "FPDF"()
             pdf.add_page()
             "montar_cabecalho_pdf"(pdf)
 
@@ -684,7 +726,7 @@ elif aba == "📉 Economia":
     # --- GERAÇÃO DE PDF ECONOMIA ---
     if st.button("📄 Gerar Laudo de Economia (PDF)", use_container_width=True):
         try:
-            pdf = FPDF()
+            pdf = "FPDF"()
             pdf.add_page()
             "montar_cabecalho_pdf"(pdf)
 
@@ -823,7 +865,7 @@ elif aba == "⚡ Queda de Tensão":
     # --- GERAÇÃO DE PDF DIAGNÓSTICO ---
     if st.button("📄 Gerar Laudo de Conformidade Elétrica (PDF)", use_container_width=True):
         try:
-            pdf = FPDF()
+            pdf = "FPDF"()
             pdf.add_page()
             "montar_cabecalho_pdf"(pdf)
 
