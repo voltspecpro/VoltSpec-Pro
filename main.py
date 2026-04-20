@@ -3,8 +3,9 @@ import pandas as pd
 import math
 from datetime import datetime
 from supabase import create_client, Client
+import io
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA (TELA CLARA) ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (ESTÉTICA CLARA) ---
 st.set_page_config(
     page_title="VoltSpec Pro",
     page_icon="⚡",
@@ -12,14 +13,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS para uma estética limpa e profissional (Removido o fundo escuro)
+# Estilo para manter a interface limpa e ocultar menus desnecessários
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; }
-    .stTextInput>div>div>input { border-radius: 5px; }
+    .stApp { background-color: #ffffff; color: #1e293b; }
+    .stButton>button { border-radius: 8px; height: 3em; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -31,99 +32,134 @@ KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
 def init_connection():
     try:
         return create_client(URL_SUPA, KEY_SUPA)
-    except:
+    except Exception as e:
         return None
 
 supabase = init_connection()
 
 # --- 3. FUNÇÃO DE SEGURANÇA (VERIFICAÇÃO SILENCIOSA) ---
 def verificar_acesso_assinante(email_usuario):
-    """Verifica se o e-mail está ativo no banco de dados[cite: 3]."""
     try:
-        if not supabase: return False, "Erro de conexão com o servidor."
-        
+        if not supabase: return False, "Erro de conexão com o banco."
+        # Busca apenas se o status está 'ativo' 
         res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
         
         if not res.data:
-            return False, "E-mail não autorizado ou assinatura inexistente."
+            return False, "E-mail não autorizado. Entre em contato com o suporte no site."
             
         dados = res.data[0]
         status = dados.get("status", "pendente")
         vencimento_str = dados.get("vencimento")
 
-        if status != "ativo":
-            return False, "Seu acesso está aguardando liberação administrativa."
+        if status != "ativo":cite: "5"
+        return False, "Sua conta está com acesso PENDENTE de liberação."
 
         if vencimento_str:
             vencimento = datetime.strptime(vencimento_str, "%Y-%m-%d").date()
-            if vencimento < datetime.now().date():
-                return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
+            if vencimento < datetime.now().date(): "cite: 6"
+        return False, f"Sua assinatura expirou em {vencimento.strftime('%d/%m/%Y')}."
 
-        return True, "Acesso Liberado"
+        return True, "Acesso Liberado" [cite: 7]
     except Exception as e:
         return False, f"Erro na verificação: {str(e)}"
 
-# --- 4. INTERFACE DE AUTENTICAÇÃO ---
+# --- 4. TELA DE LOGIN E CADASTRO ---
 if 'logado' not in st.session_state:
     st.session_state.logado = False
 
 if not st.session_state.logado:
-    # Centralizando a tela de login
-    _, col_login, _ = st.columns([1, 2, 1])
-    with col_login:
-        st.title("⚡ VoltSpec Pro")
-        t1, t2 = st.tabs(["Entrar", "Criar Conta"])
-        
-        with t1:
-            em = st.text_input("E-mail cadastrado", key="login_email")
-            pw = st.text_input("Senha", type="password", key="login_pw")
-            if st.button("Acessar Sistema"):
-                try:
-                    res = supabase.auth.sign_in_with_password({"email": em, "password": pw})
-                    if res.user:
-                        st.session_state.user = res.user
-                        st.session_state.logado = True
-                        st.rerun()
-                except:
-                    st.error("E-mail ou senha inválidos.")
-        
-        with t2:
-            st.write("Cadastre-se para solicitar acesso.")
-            nem = st.text_input("E-mail profissional", key="reg_email")
-            npw = st.text_input("Defina uma senha", type="password", key="reg_pw")
-            if st.button("Solicitar Cadastro"):
-                try:
-                    supabase.auth.sign_up({"email": nem, "password": npw})
-                    st.success("Conta criada com sucesso! Verifique seu e-mail para confirmar.")
-                except Exception as e:
-                    st.error(f"Erro ao cadastrar: {e}")
+    st.title("⚡ VoltSpec Pro")
+    t1, t2 = st.tabs(["Acessar Conta", "Novo Cadastro"])
+    
+    with t1:
+        em = st.text_input("E-mail profissional")
+        pw = st.text_input("Sua senha", type="password")
+        if st.button("Entrar no VoltSpec", use_container_width=True):
+            try:
+                res = supabase.auth.sign_in_with_password({"email": em, "password": pw}) ["cite": 8]
+                if res.user:
+                    st.session_state.user = res.user
+                    st.session_state.logado = True
+                    st.rerun() ["cite": 9]
+            except:
+                st.error("E-mail ou senha inválidos.")
+    
+    with t2:
+        st.info("Após criar a conta, a liberação ocorre conforme o plano adquirido no site.")
+        nem = st.text_input("Seu melhor e-mail")
+        npw = st.text_input("Crie uma senha forte", type="password")
+        if st.button("Criar minha conta", use_container_width=True): "cite: 10"
+    try:
+                supabase.auth.sign_up({"email": nem, "password": npw})
+                st.success("Conta criada! Verifique seu e-mail e aguarde a liberação.") ["cite": 11]
+    except Exception as e:
+                st.error(f"Erro ao cadastrar: {e}")
     st.stop()
 
-# --- 5. CONTROLE DE ACESSO PÓS-LOGIN ---
-if st.session_state.logado:
-    # Correção do erro: Chamada da função sem aspas
-    permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
-    
-    if not permitido:
-        st.warning(f"🔒 {msg}")
-        st.info("Para dúvidas sobre o seu acesso, entre em contato com o suporte através do nosso site oficial.")
-        
-        if st.button("Sair da Conta"):
-            st.session_state.logado = False
-            st.rerun()
-        st.stop()
+# --- 5. BLOQUEIO DE ACESSO ---
+permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
+if not permitido:
+    st.warning(f"🔒 {msg}")
+    st.write("Não identificamos um acesso ativo para este e-mail.") ["cite": 12]
+    if st.button("Sair da Conta"):
+        st.session_state.logado = False
+        st.rerun() ["cite": 13]
+    st.stop()
 
-# --- 6. SISTEMA PRINCIPAL (SÓ PARA USUÁRIOS ATIVOS) ---
-# Inicialização de Variáveis de Estado
+# --- 6. INICIALIZAÇÃO DE DADOS (CORREÇÃO DO ATTRIBUTEERROR) ---
+# Aqui definimos a estrutura da tabela antes de qualquer aba carregar
+if 'dados_cargas' not in st.session_state:
+    st.session_state.dados_cargas = pd.DataFrame({
+        "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
+        "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
+        "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
+        "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+        "TUG (Qtd)": [0, 0, 0, 0, 0],
+        "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+    }) ["cite": 33]
+
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''}
 
-# Sidebar de Usuário
+# --- 7. SISTEMA PRINCIPAL ---
 st.sidebar.title("VoltSpec Pro ⚡")
-st.sidebar.caption(f"Logado como: {st.session_state.user.email}")
-if st.sidebar.button("Encerrar Sessão"):
+st.sidebar.caption(f"Usuário: {st.session_state.user.email}")
+if st.sidebar.button("Sair"):
     st.session_state.logado = False
     st.rerun()
+
+aba = st.radio("Selecione a ferramenta:", 
+    ["🏠 Cargas", "📐 Dimensionador", "⚡ Queda de Tensão", "💡 Lumino", "❄️ Clima", "☀️ Solar", "📉 Economia", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos", "⚙️ Perfil"], 
+    horizontal=True)
+
+if aba == "🏠 Cargas":
+    st.header("📋 Dimensionamento de Cargas (NBR 5410)")
+    # O editor agora funciona porque 'dados_cargas' foi inicializado acima
+    df_editor = st.data_editor(
+        st.session_state.dados_cargas,
+        num_rows="dynamic",
+        use_container_width=True
+    )
+    if st.button("⚡ Calcular Projeto"):
+        st.session_state.dados_cargas = df_editor
+        st.success("Cálculos atualizados com sucesso!")
+
+elif aba == "⚙️ Perfil":
+    st.header("⚙️ Configurações do Técnico")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.session_state.perfil['nome_empresa'] = st.text_input("Empresa:", value=st.session_state.perfil['nome_empresa'])
+        st.session_state.perfil['crt'] = st.text_input("CRT/CFT:", value=st.session_state.perfil['crt'])
+    with c2:
+        st.session_state.perfil['cnpj'] = st.text_input("CNPJ:", value=st.session_state.perfil['cnpj'])
+        st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil['email_contato'])
+
+else:
+    st.write(f"Módulo **{aba}** carregado. Desenvolva a lógica específica aqui.")
+
+st.markdown("---")
+st.caption("VoltSpec Pro - Excelência em Engenharia Elétrica")
 
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
