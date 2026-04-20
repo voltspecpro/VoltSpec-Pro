@@ -284,7 +284,7 @@ def carregar_perfil_supabase():
             st.session_state.perfil['endereco']      = d.get('endereco_comercial', '')
             st.session_state.perfil['email_contato'] = d.get('email', '')
             st.session_state.perfil['data_cadastro']     = d.get('created_at', str(datetime.now(timezone.utc)))
-            st.session_state.perfil['status_assinatura'] = d.get('status_assinatura', 'trial')
+            st.session_state.perfil['status_assinatura'] = d.get('status_assinatura', 'privado')
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar o perfil: {e}")
 
@@ -343,7 +343,7 @@ if 'resumo_materiais' not in st.session_state:
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {
         'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': '',
-        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'trial'
+        'data_cadastro': formatar_data_iso(), 'status_assinatura': 'privado'
     }
 def verificar_assinatura_rigorosa(email_usuario):
     """
@@ -436,7 +436,7 @@ def calcular_dias_uso():
     return max(0, (data_agora - data_cad).days)
 
 dias_de_uso = calcular_dias_uso()
-status_ass = st.session_state.perfil.get('status_assinatura', 'trial')
+status_ass = st.session_state.perfil.get('status_assinatura', 'privado')
 tem_acesso = (dias_de_uso <= 7) or (status_ass == 'ativo')
 
 # --- CONFIGURAÇÃO DA BARRA LATERAL (SIDEBAR) ---
