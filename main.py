@@ -118,11 +118,6 @@ if st.session_state.logado:
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'telefone': '', 'cnpj': '', 'endereco': '', 'email_contato': ''}
 
-# Menu de Navegação Superior
-aba = st.radio("Selecione a ferramenta:", 
-    ["🏠 Cargas", "📐 Dimensionador", "⚡ Queda de Tensão", "💡 Lumino", "❄️ Clima", "☀️ Solar", "📉 Economia", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos", "⚙️ Perfil"], 
-    horizontal=True)
-
 # Sidebar de Usuário
 st.sidebar.title("VoltSpec Pro ⚡")
 st.sidebar.caption(f"Logado como: {st.session_state.user.email}")
