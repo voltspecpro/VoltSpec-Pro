@@ -1421,22 +1421,34 @@ elif aba == "📐 Dimensionador":
 # --- MÓDULO PRODUTOS ---
 elif aba == "🛒 Produtos":
     st.header("🛒 Vitrine de Ferramentas (Mercado Livre)")
+    st.markdown("Aproveite as melhores oportunidades e descontos para equipar sua mala de ferramentas.")
+    
     prods = [
         {"nome": "Jogo Chaves Isoladas",                     "img": "https://http2.mlstatic.com/D_NQ_NP_2X_701755-MLB85959666529_062025-F.webp",  "link": "https://meli.la/2xLSiQJ"},
         {"nome": "Alicate Decapador Vonder",                 "img": "https://http2.mlstatic.com/D_NQ_NP_2X_608489-MLA99480826142_112025-F.webp",  "link": "https://meli.la/2L47LTv"},
-        {"nome": "Bolsa Ferramentas Reforcada",              "img": "https://http2.mlstatic.com/D_NQ_NP_2X_947240-MLA99992405049_112025-F.webp",  "link": "https://meli.la/1E4on12"},
+        {"nome": "Bolsa Ferramentas Reforçada",              "img": "https://http2.mlstatic.com/D_NQ_NP_2X_947240-MLA99992405049_112025-F.webp",  "link": "https://meli.la/1E4on12"},
         {"nome": "Alicate Crimpar Prensa",                   "img": "https://http2.mlstatic.com/D_NQ_NP_2X_928036-MLA99440131490_112025-F.webp",  "link": "https://meli.la/247XSK7"},
-        {"nome": "Kit Eletrica Chave Teste + Caneta",        "img": "https://http2.mlstatic.com/D_NQ_NP_2X_925244-MLA102644904043_122025-F.webp", "link": "https://meli.la/214x31Y"},
+        {"nome": "Kit Elétrica Chave Teste + Caneta",        "img": "https://http2.mlstatic.com/D_NQ_NP_2X_925244-MLA102644904043_122025-F.webp", "link": "https://meli.la/214x31Y"},
         {"nome": "Alicate Universal Eletricista 1000V",      "img": "https://http2.mlstatic.com/D_NQ_NP_2X_718013-MLA96100316665_102025-F.webp",  "link": "https://meli.la/14aG1bU"},
         {"nome": "Cinto Pochete Porta Ferramentas",          "img": "https://http2.mlstatic.com/D_NQ_NP_2X_993974-MLA96427705692_102025-F.webp",  "link": "https://meli.la/1RKgafT"},
-        {"nome": "Cinturao Eletricista Multifuncional",      "img": "https://http2.mlstatic.com/D_NQ_NP_2X_798036-MLB106606586781_022026-F.webp", "link": "https://meli.la/1JcRtAG"},
+        {"nome": "Cinturão Eletricista Multifuncional",      "img": "https://http2.mlstatic.com/D_NQ_NP_2X_798036-MLB106606586781_022026-F.webp", "link": "https://meli.la/1JcRtAG"},
     ]
+    
     cols = st.columns(4)
     for i, p in enumerate(prods):
         with cols[i % 4]:
-            st.image(p["img"], use_container_width=True)
-            st.write(f"**{p['nome']}**")
-            st.link_button("🚀 Ver no Mercado Livre", p["link"], use_container_width=True)
+            # Criamos um "card" com altura fixa e fundo branco usando HTML
+            html_img = f"""
+            <div style="background-color: white; border-radius: 10px; padding: 10px; display: flex; justify-content: center; align-items: center; height: 160px; margin-bottom: 10px;">
+                <img src="{p['img']}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            </div>
+            """
+            st.markdown(html_img, unsafe_allow_html=True)
+            
+            # Travamos também a altura do título para os botões não desalinharem
+            st.markdown(f"<div style='height: 45px; text-align: center; font-size: 14px;'><b>{p['nome']}</b></div>", unsafe_allow_html=True)
+            
+            st.link_button("🚀 Ver Oferta", p["link"], use_container_width=True)
 
 # --- 8. RODAPÉ ---
 st.markdown("---")
