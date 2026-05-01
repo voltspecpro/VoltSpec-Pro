@@ -173,28 +173,47 @@ elif aba == "🏠 Cargas":
                 tensao_fase_neutro = 220
  
     # Inicialização segura do DataFrame
-    if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Watts)"]:
+    if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
         st.session_state.dados_cargas = pd.DataFrame({
             "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
             "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
             "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
             "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+            "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
             "TUG (Qtd)": [0, 0, 0, 0, 0],
             "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "TUE (Qtd)": [0, 0, 0, 0, 0],
             "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
         })
  
     st.subheader("1. Entrada de Dados e Medidas")
+    
+    # Colunas editáveis: apenas Área, Perímetro e TUE (Watts)
+    col_editar = st.columns(3)
+    with col_editar[0]:
+        st.write("**Área (m²) e Perímetro (m)**")
+    with col_editar[1]:
+        st.write("**TUE - Watts**")
+    with col_editar[2]:
+        st.write("**Resultado Calculado**")
+    
     df_editor = st.data_editor(
-        st.session_state.dados_cargas,
+        st.session_state.dados_cargas[["Comodo", "Area (m2)", "Perimetro (m)", "TUE (Watts)"]],
         num_rows="dynamic",
         use_container_width=True,
-        key="editor_cargas_v1"
+        key="editor_cargas_v1",
+        disabled=["Comodo"]
     )
  
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
-        st.session_state.dados_cargas = df_editor.copy()
-        df_calc = df_editor.copy()
+        st.session_state.dados_cargas = st.session_state.dados_cargas.iloc[:len(df_editor)].copy()
+        
+        # Atualizar os dados editáveis
+        st.session_state.dados_cargas["Area (m2)"] = df_editor["Area (m2)"].values
+        st.session_state.dados_cargas["Perimetro (m)"] = df_editor["Perimetro (m)"].values
+        st.session_state.dados_cargas["TUE (Watts)"] = df_editor["TUE (Watts)"].values
+        
+        df_calc = st.session_state.dados_cargas.copy()
         novos_circuitos = []
         pot_ilum_total = 0
         pot_tug_total = 0
@@ -211,7 +230,14 @@ elif aba == "🏠 Cargas":
             try:
                 a = float(r["Area (m2)"] or 0)
                 p = float(r["Perimetro (m)"] or 0)
-                if a <= 0 or p <= 0: continue
+                if a <= 0 or p <= 0: 
+                    # Limpar valores se dados inválidos
+                    st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = "-"
+                    st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = "-"
+                    st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = 0
+                    st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = 0.0
+                    st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = 0
+                    continue
                 
                 nome = str(r["Comodo"]).lower()
  
@@ -223,7 +249,10 @@ elif aba == "🏠 Cargas":
                     va_ilum = 100 + (math.floor((a - 6) / 4) * 60)
                 
                 qtd_lamp = max(math.ceil(va_ilum / 100), 1)
-                df_calc.at[i, "Iluminacao (VA)"] = f"{qtd_lamp} pt ({va_ilum}VA)"
+                tipo_ilum = "LED" if qtd_lamp <= 3 else ("Fluorescente" if qtd_lamp <= 5 else "Mista")
+                
+                st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = f"{va_ilum}VA"
+                st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = f"{qtd_lamp} pt {tipo_ilum}"
                 pot_ilum_total += va_ilum
  
                 # MATERIAIS ILUMINAÇÃO (Estimativa de metragem - circuito 1.5mm2)
@@ -254,8 +283,8 @@ elif aba == "🏠 Cargas":
                     else:
                         p_tugs = q_tugs * 100
  
-                df_calc.at[i, "TUG (Qtd)"] = int(q_tugs)
-                df_calc.at[i, "Potencia TUG (VA)"] = float(p_tugs)
+                st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = int(q_tugs)
+                st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = float(p_tugs)
                 pot_tug_total += p_tugs
  
                 # MATERIAIS TUGS (circuito 2.5mm2)
@@ -266,6 +295,8 @@ elif aba == "🏠 Cargas":
  
                 # ===== CÁLCULO TUE (Tomadas de Uso Específico) =====
                 tue_w = float(r["TUE (Watts)"] or 0)
+                qtd_tue = 0
+                
                 if tue_w > 0:
                     # Define a tensão da TUE de acordo com o sistema selecionado
                     if sistema_eletrico == "Monofásico 127V":
@@ -274,6 +305,7 @@ elif aba == "🏠 Cargas":
                         v_tue = 220
                     
                     corrente = tue_w / v_tue
+                    qtd_tue = 1
                     
                     # Dimensionamento de bitola conforme corrente (Tabela NBR 5410)
                     if corrente <= 16:
@@ -326,6 +358,9 @@ elif aba == "🏠 Cargas":
                         cabos[bitola]["Fase"] += comp_tue
                         cabos[bitola]["Neutro"] += comp_tue
                         cabos[bitola]["Terra"] += comp_tue
+ 
+                # Atualizar quantidade de TUE
+                st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = int(qtd_tue)
  
             except Exception as e:
                 continue
@@ -381,7 +416,42 @@ elif aba == "🏠 Cargas":
         st.success("✅ Cálculos realizados com sucesso conforme NBR 5410!")
         st.rerun()
  
-    # ===== EXIBIÇÃO DOS RESULTADOS =====
+    # ===== EXIBIÇÃO DA TABELA PREENCHIDA =====
+    st.subheader("2. Resultados Calculados")
+    
+    if st.session_state.get('lista_circuitos'):
+        # Mostrar tabela completa com os resultados
+        st.write("**Resumo de Cargas por Cômodo:**")
+        df_resumo = st.session_state.dados_cargas[[
+            "Comodo", 
+            "Area (m2)", 
+            "Perimetro (m)", 
+            "Iluminacao (VA)", 
+            "Iluminacao Tipo",
+            "TUG (Qtd)", 
+            "Potencia TUG (VA)",
+            "TUE (Qtd)",
+            "TUE (Watts)"
+        ]].copy()
+        
+        st.dataframe(df_resumo, use_container_width=True)
+    else:
+        # Mostrar tabela vazia até calcular
+        st.info("📊 Preencha os dados (Área, Perímetro e TUE) e clique em 'Calcular Projeto e Dimensionar Circuitos' para ver os resultados aqui.")
+        df_resumo = st.session_state.dados_cargas[[
+            "Comodo", 
+            "Area (m2)", 
+            "Perimetro (m)", 
+            "Iluminacao (VA)", 
+            "Iluminacao Tipo",
+            "TUG (Qtd)", 
+            "Potencia TUG (VA)",
+            "TUE (Qtd)",
+            "TUE (Watts)"
+        ]].copy()
+        st.dataframe(df_resumo, use_container_width=True, disabled=True)
+ 
+    # ===== EXIBIÇÃO DOS RESULTADOS (QDC e MATERIAIS) =====
     if st.session_state.get('lista_circuitos'):
         st.divider()
         st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
@@ -392,134 +462,155 @@ elif aba == "🏠 Cargas":
         df_materiais = pd.DataFrame(st.session_state.resumo_materiais)
         st.dataframe(df_materiais, use_container_width=True)
  
-        if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
-            try:
-                from fpdf import FPDF
-                from datetime import datetime, timedelta
-                
-                hoje = datetime.now()
-                validade = hoje + timedelta(days=7)
-                
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 16)
-                pdf.cell(0, 15, "MEMORIAL TECNICO - PROJETO ELETRICO", 0, 1, "C")
-                
-                # Informações gerais
-                pdf.set_font("Arial", "I", 8)
-                pdf.cell(0, 6, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')} | Valido ate: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
-                
-                # Configuração da instalação
-                pdf.ln(5)
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, "CONFIGURACAO DA INSTALACAO", 0, 1)
-                pdf.set_font("Arial", "", 10)
-                pdf.cell(0, 6, f"Concessionaria: {st.session_state.get('concessionaria', 'N/A')}", 0, 1)
-                pdf.cell(0, 6, f"Sistema Eletrico: {st.session_state.get('sistema_eletrico', 'N/A')}", 0, 1)
-                pdf.cell(0, 6, f"Norma Utilizada: NBR 5410 (Instalacoes Eletricas de Baixa Tensao)", 0, 1)
-                
-                # Tabela de Cargas no PDF
-                pdf.ln(5)
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, "1. MEMORIAL DE CARGAS", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 9)
-                pdf.set_fill_color(200, 200, 200)
-                
-                col_widths = [35, 20, 20, 20, 20, 20, 25]
-                headers = ["Comodo", "Area", "Ilum.", "TUGs", "Pot.TUG", "TUE", "Perim."]
-                
-                for header, width in zip(headers, col_widths):
-                    pdf.cell(width, 8, header, 1, 0, "C", True)
-                pdf.ln()
-                
-                pdf.set_font("Arial", "", 8)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for _, r in st.session_state.dados_cargas.iterrows():
-                    pdf.cell(35, 7, str(r["Comodo"])[:15], 1)
-                    pdf.cell(20, 7, f"{float(r['Area (m2)']):.1f}m2", 1, 0, "C")
-                    pdf.cell(20, 7, str(r["Iluminacao (VA)"])[:12], 1, 0, "C")
-                    pdf.cell(20, 7, str(int(r["TUG (Qtd)"])), 1, 0, "C")
-                    pdf.cell(20, 7, f"{float(r['Potencia TUG (VA)']):.0f}VA", 1, 0, "C")
-                    pdf.cell(20, 7, f"{float(r['TUE (Watts)']):.0f}W", 1, 0, "C")
-                    pdf.cell(25, 7, f"{float(r['Perimetro (m)']):.1f}m", 1, 1, "C")
-                
-                # Tabela de Circuitos
-                pdf.ln(5)
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, "2. QUADRO DE CIRCUITOS (QDC)", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 8)
-                pdf.set_fill_color(200, 200, 200)
-                
-                circ_widths = [15, 30, 20, 15, 18, 15, 18, 15]
-                circ_headers = ["Circ", "Descricao", "Potencia", "Tensao", "Corrente", "Cabo", "Disj.", "Tipo"]
-                
-                for header, width in zip(circ_headers, circ_widths):
-                    pdf.cell(width, 8, header, 1, 0, "C", True)
-                pdf.ln()
-                
-                pdf.set_font("Arial", "", 7)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for circ in st.session_state.lista_circuitos:
-                    pdf.cell(15, 7, str(circ.get("Circ", "")), 1)
-                    pdf.cell(30, 7, str(circ.get("Descricao", ""))[:20], 1, 0, "L")
-                    pdf.cell(20, 7, str(circ.get("Potencia", "")), 1, 0, "C")
-                    pdf.cell(15, 7, str(circ.get("Tensao", "")), 1, 0, "C")
-                    pdf.cell(18, 7, str(circ.get("Corrente", ""))[:10], 1, 0, "C")
-                    pdf.cell(15, 7, str(circ.get("Cabo", "")), 1, 0, "C")
-                    pdf.cell(18, 7, str(circ.get("Disjuntor", "")), 1, 0, "C")
-                    pdf.cell(15, 7, str(circ.get("Tipo Disj.", ""))[:10], 1, 1, "C")
-                
-                # Tabela de Materiais
-                pdf.ln(5)
-                pdf.set_font("Arial", "B", 11)
-                pdf.cell(0, 8, "3. LISTA DE MATERIAIS", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 9)
-                pdf.set_fill_color(200, 200, 200)
-                pdf.cell(120, 8, "Material", 1, 0, "L", True)
-                pdf.cell(70, 8, "Quantidade", 1, 1, "C", True)
-                
-                pdf.set_font("Arial", "", 8)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for mat in st.session_state.resumo_materiais:
-                    pdf.cell(120, 7, str(mat.get("Item", "")), 1)
-                    pdf.cell(70, 7, str(mat.get("Qtd", "")), 1, 1, "C")
-                
-                # Notas técnicas
-                pdf.ln(8)
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 8, "NOTAS TECNICAS:", 0, 1)
-                pdf.set_font("Arial", "", 8)
-                notas = [
-                    "- Todos os calculos foram realizados conforme NBR 5410:2008",
-                    "- As bitolas de cabo foram selecionadas com seguranca",
-                    "- Os disjuntores sao de curva C (uso residencial/comercial)",
-                    "- Considerar topico 6.4.3 da NBR 5410 para agrupamento de circuitos",
-                    "- O projeto deve ser executado por eletricista registrado no CREA"
-                ]
-                for nota in notas:
-                    pdf.multi_cell(0, 5, nota)
-                
-                # Gerar PDF
-                pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
-                st.download_button(
-                    "⬇️ Baixar Memorial Técnico (PDF)",
-                    pdf_out,
-                    "Memorial_Tecnico_VoltSpec.pdf",
-                    "application/pdf",
-                    use_container_width=True
-                )
-                
-            except Exception as e:
-                st.error(f"Erro ao gerar PDF: {str(e)}")
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
+                try:
+                    from fpdf import FPDF
+                    from datetime import datetime, timedelta
+                    
+                    hoje = datetime.now()
+                    validade = hoje + timedelta(days=7)
+                    
+                    pdf = FPDF()
+                    pdf.add_page()
+                    pdf.set_font("Arial", "B", 16)
+                    pdf.cell(0, 15, "MEMORIAL TECNICO - PROJETO ELETRICO", 0, 1, "C")
+                    
+                    # Informações gerais
+                    pdf.set_font("Arial", "I", 8)
+                    pdf.cell(0, 6, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')} | Valido ate: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
+                    
+                    # Configuração da instalação
+                    pdf.ln(5)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 8, "CONFIGURACAO DA INSTALACAO", 0, 1)
+                    pdf.set_font("Arial", "", 10)
+                    pdf.cell(0, 6, f"Concessionaria: {st.session_state.get('concessionaria', 'N/A')}", 0, 1)
+                    pdf.cell(0, 6, f"Sistema Eletrico: {st.session_state.get('sistema_eletrico', 'N/A')}", 0, 1)
+                    pdf.cell(0, 6, f"Norma Utilizada: NBR 5410 (Instalacoes Eletricas de Baixa Tensao)", 0, 1)
+                    
+                    # Tabela de Cargas no PDF
+                    pdf.ln(5)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 8, "1. MEMORIAL DE CARGAS", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 8)
+                    pdf.set_fill_color(200, 200, 200)
+                    
+                    col_widths = [30, 16, 16, 18, 18, 16, 18, 14, 18]
+                    headers = ["Comodo", "Area", "Perim.", "Ilum.", "Tipo Ilum.", "TUGs", "Pot.TUG", "TUE", "Watts"]
+                    
+                    for header, width in zip(headers, col_widths):
+                        pdf.cell(width, 8, header, 1, 0, "C", True)
+                    pdf.ln()
+                    
+                    pdf.set_font("Arial", "", 7)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for _, r in st.session_state.dados_cargas.iterrows():
+                        pdf.cell(30, 7, str(r["Comodo"])[:15], 1)
+                        pdf.cell(16, 7, f"{float(r['Area (m2)']):.1f}m2", 1, 0, "C")
+                        pdf.cell(16, 7, f"{float(r['Perimetro (m)']):.1f}m", 1, 0, "C")
+                        pdf.cell(18, 7, str(r["Iluminacao (VA)"])[:12], 1, 0, "C")
+                        pdf.cell(18, 7, str(r["Iluminacao Tipo"])[:16], 1, 0, "C")
+                        pdf.cell(16, 7, str(int(r["TUG (Qtd)"])), 1, 0, "C")
+                        pdf.cell(18, 7, f"{float(r['Potencia TUG (VA)']):.0f}VA", 1, 0, "C")
+                        pdf.cell(14, 7, str(int(r["TUE (Qtd)"])), 1, 0, "C")
+                        pdf.cell(18, 7, f"{float(r['TUE (Watts)']):.0f}W", 1, 1, "C")
+                    
+                    # Tabela de Circuitos
+                    pdf.ln(5)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 8, "2. QUADRO DE CIRCUITOS (QDC)", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 8)
+                    pdf.set_fill_color(200, 200, 200)
+                    
+                    circ_widths = [15, 30, 20, 15, 18, 15, 18, 15]
+                    circ_headers = ["Circ", "Descricao", "Potencia", "Tensao", "Corrente", "Cabo", "Disj.", "Tipo"]
+                    
+                    for header, width in zip(circ_headers, circ_widths):
+                        pdf.cell(width, 8, header, 1, 0, "C", True)
+                    pdf.ln()
+                    
+                    pdf.set_font("Arial", "", 7)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for circ in st.session_state.lista_circuitos:
+                        pdf.cell(15, 7, str(circ.get("Circ", "")), 1)
+                        pdf.cell(30, 7, str(circ.get("Descricao", ""))[:20], 1, 0, "L")
+                        pdf.cell(20, 7, str(circ.get("Potencia", "")), 1, 0, "C")
+                        pdf.cell(15, 7, str(circ.get("Tensao", "")), 1, 0, "C")
+                        pdf.cell(18, 7, str(circ.get("Corrente", ""))[:10], 1, 0, "C")
+                        pdf.cell(15, 7, str(circ.get("Cabo", "")), 1, 0, "C")
+                        pdf.cell(18, 7, str(circ.get("Disjuntor", "")), 1, 0, "C")
+                        pdf.cell(15, 7, str(circ.get("Tipo Disj.", ""))[:10], 1, 1, "C")
+                    
+                    # Tabela de Materiais
+                    pdf.ln(5)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 8, "3. LISTA DE MATERIAIS", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.set_fill_color(200, 200, 200)
+                    pdf.cell(120, 8, "Material", 1, 0, "L", True)
+                    pdf.cell(70, 8, "Quantidade", 1, 1, "C", True)
+                    
+                    pdf.set_font("Arial", "", 8)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for mat in st.session_state.resumo_materiais:
+                        pdf.cell(120, 7, str(mat.get("Item", "")), 1)
+                        pdf.cell(70, 7, str(mat.get("Qtd", "")), 1, 1, "C")
+                    
+                    # Notas técnicas
+                    pdf.ln(8)
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 8, "NOTAS TECNICAS:", 0, 1)
+                    pdf.set_font("Arial", "", 8)
+                    notas = [
+                        "- Todos os calculos foram realizados conforme NBR 5410:2008",
+                        "- As bitolas de cabo foram selecionadas com seguranca",
+                        "- Os disjuntores sao de curva C (uso residencial/comercial)",
+                        "- Considerar topico 6.4.3 da NBR 5410 para agrupamento de circuitos",
+                        "- O projeto deve ser executado por eletricista registrado no CREA"
+                    ]
+                    for nota in notas:
+                        pdf.multi_cell(0, 5, nota)
+                    
+                    # Gerar PDF
+                    pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
+                    st.download_button(
+                        "⬇️ Baixar Memorial Técnico (PDF)",
+                        pdf_out,
+                        "Memorial_Tecnico_VoltSpec.pdf",
+                        "application/pdf",
+                        use_container_width=True
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {str(e)}")
+        
+        with col_btn2:
+            if st.button("🔄 Limpar e Recalcular", use_container_width=True):
+                st.session_state.lista_circuitos = None
+                st.session_state.resumo_materiais = None
+                st.session_state.dados_cargas = pd.DataFrame({
+                    "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
+                    "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
+                    "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
+                    "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+                    "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
+                    "TUG (Qtd)": [0, 0, 0, 0, 0],
+                    "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+                    "TUE (Qtd)": [0, 0, 0, 0, 0],
+                    "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+                })
+                st.rerun()
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
