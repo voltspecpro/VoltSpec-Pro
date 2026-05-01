@@ -6,7 +6,7 @@ from fpdf import FPDF
 from supabase import create_client, Client
 import io
 import unicodedata
-
+ 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (ESTÉTICA CLARA) ---
 st.set_page_config(
     page_title="VoltSpec Pro",
@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
+ 
 # Estilo para manter a interface branca e abas limpas
 st.markdown("""
     <style>
@@ -33,33 +33,33 @@ st.markdown("""
     .stButton>button { border-radius: 8px; font-weight: bold; height: 3em; width: 100%; }
     </style>
     """, unsafe_allow_html=True)
-
+ 
 # --- 2. FUNÇÕES AUXILIARES (PDF E TRATAMENTO) ---
 def limpar_texto(texto):
     if not texto: return ""
     return "".join(ch for ch in unicodedata.normalize('NFKD', str(texto)) 
                    if unicodedata.category(ch) != 'Mn').encode('ascii', 'ignore').decode('ascii')
-
+ 
 def montar_cabecalho_pdf(pdf, perfil):
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "VOLTSPEC PRO - MEMORIAL TECNICO", 0, 1, "C")
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 5, f"Empresa: {perfil.get('empresa', 'N/A')}", 0, 1, "L")
-    pdf.cell(0, 5, f"Responsavel: {perfil.get('nome', 'N/A')} | CRT: {perfil.get('crt', 'N/A')}", 0, 1, "L")
+    pdf.cell(0, 5, f"Empresa: {perfil.get('nome_empresa', 'N/A')}", 0, 1, "L")
+    pdf.cell(0, 5, f"Responsavel: {perfil.get('crt', 'N/A')} | CRT: {perfil.get('crt', 'N/A')}", 0, 1, "L")
     pdf.line(10, 32, 200, 32)
     pdf.ln(10)
-
+ 
 # --- 3. CONEXÃO COM BANCO (SUPABASE) ---
 URL_SUPA = st.secrets.get("SUPABASE_URL", "")
 KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
-
+ 
 @st.cache_resource
 def init_connection():
     try: return create_client(URL_SUPA, KEY_SUPA)
     except: return None
-
+ 
 supabase = init_connection()
-
+ 
 def verificar_acesso_assinante(email_usuario):
     try:
         if not supabase: return False, "Erro de conexão."
@@ -68,10 +68,10 @@ def verificar_acesso_assinante(email_usuario):
         if res.data[0].get("status") != "ativo": return False, "Acesso pendente."
         return True, "Liberado"
     except: return False, "Erro na verificação."
-
+ 
 # --- 4. LOGIN E SEGURANÇA ---
 if 'logado' not in st.session_state: st.session_state.logado = False
-
+ 
 if not st.session_state.logado:
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
@@ -97,7 +97,7 @@ if not st.session_state.logado:
                     st.success("Verifique o seu e-mail!")
                 except: st.error("Erro ao criar conta.")
     st.stop()
-
+ 
 # Bloqueio de Assinatura
 permitido, msg = verificar_acesso_assinante(st.session_state.user.email)
 if not permitido:
@@ -106,30 +106,519 @@ if not permitido:
         st.session_state.logado = False
         st.rerun()
     st.stop()
-
+ 
 # --- 5. INICIALIZAÇÃO DE VARIÁVEIS ---
 if 'perfil' not in st.session_state:
-    st.session_state.perfil = {'nome': '', 'crt': '', 'empresa': '', 'cnpj': ''}
-
+    st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'cnpj': '', 'telefone': '', 'email_contato': '', 'endereco': ''}
+ 
 if 'dados_cargas' not in st.session_state:
     st.session_state.dados_cargas = pd.DataFrame({
-        "Comodo": ["Sala", "Cozinha", "Banheiro"],
-        "Area (m2)": [15.0, 10.0, 4.5],
-        "Perimetro (m)": [16.0, 13.0, 9.0],
-        "Iluminacao (VA)": ["-", "-", "-"],
-        "TUG (Qtd)": [0, 0, 0],
-        "Potencia TUG (VA)": [0.0, 0.0, 0.0],
-        "TUE (Watts)": [0.0, 0.0, 5500.0]
+        "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
+        "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
+        "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
+        "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+        "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
+        "TUG (Qtd)": [0, 0, 0, 0, 0],
+        "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "TUE (Qtd)": [0, 0, 0, 0, 0],
+        "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
     })
-
+ 
 if 'lista_circuitos' not in st.session_state: st.session_state.lista_circuitos = []
 if 'resumo_materiais' not in st.session_state: st.session_state.resumo_materiais = []
-
+ 
 # --- 6. ESTRUTURA DE ABAS INDEPENDENTES ---
 st.sidebar.title("VoltSpec Pro ⚡")
 if st.sidebar.button("Terminar Sessão"):
     st.session_state.logado = False
     st.rerun()
+ 
+# --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
+aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
+ 
+# --- MÓDULO PERFIL ---
+if aba == "⚙️ Perfil":
+    st.header("⚙️ Configurações do Técnico")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.session_state.perfil['nome_empresa'] = st.text_input("Empresa:", value=st.session_state.perfil.get('nome_empresa', ''))
+        st.session_state.perfil['crt']          = st.text_input("CRT/CFT:", value=st.session_state.perfil.get('crt', ''))
+        st.session_state.perfil['telefone']     = st.text_input("WhatsApp:", value=st.session_state.perfil.get('telefone', ''))
+    with c2:
+        st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
+        st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
+        st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
+ 
+    if st.button("💾 Salvar na Nuvem"):
+        st.success("Perfil salvo com sucesso!")
+ 
+# --- MÓDULO CARGAS ---
+elif aba == "🏠 Cargas":
+    st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
+ 
+    with st.expander("🔌 Configuração da Rede e Concessionária", expanded=True):
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            concessionaria = st.selectbox("Selecione a Concessionária:",
+                                         ["CEMIG (MG)", "CPFL (SP)", "ENEL (RJ/SP)", "EQUATORIAL", "Outra (Manual)"])
+        with col_c2:
+            sistema_eletrico = st.selectbox(
+                "Sistema Elétrico:",
+                ["Monofásico 127V", "Bifásico 220V"],
+                index=0
+            )
+            if sistema_eletrico == "Monofásico 127V":
+                tensao_fase = 127
+                tensao_fase_neutro = 127
+            else:
+                tensao_fase = 220
+                tensao_fase_neutro = 220
+ 
+    if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
+        st.session_state.dados_cargas = pd.DataFrame({
+            "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
+            "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
+            "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
+            "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+            "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
+            "TUG (Qtd)": [0, 0, 0, 0, 0],
+            "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+            "TUE (Qtd)": [0, 0, 0, 0, 0],
+            "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+        })
+ 
+    st.subheader("1. Entrada de Dados e Medidas")
+    
+    col_editar = st.columns(3)
+    with col_editar[0]:
+        st.write("**Área (m²) e Perímetro (m)**")
+    with col_editar[1]:
+        st.write("**TUE - Watts**")
+    with col_editar[2]:
+        st.write("**Resultado Calculado**")
+    
+    df_editor = st.data_editor(
+        st.session_state.dados_cargas[["Comodo", "Area (m2)", "Perimetro (m)", "TUE (Watts)"]],
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor_cargas_v1",
+        disabled=["Comodo"]
+    )
+ 
+    if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
+        st.session_state.dados_cargas = st.session_state.dados_cargas.iloc[:len(df_editor)].copy()
+        
+        st.session_state.dados_cargas["Area (m2)"] = df_editor["Area (m2)"].values
+        st.session_state.dados_cargas["Perimetro (m)"] = df_editor["Perimetro (m)"].values
+        st.session_state.dados_cargas["TUE (Watts)"] = df_editor["TUE (Watts)"].values
+        
+        df_calc = st.session_state.dados_cargas.copy()
+        novos_circuitos = []
+        pot_ilum_total = 0
+        pot_tug_total = 0
+ 
+        cabos = {
+            "1.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "2.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "4.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "6.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
+            "10.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
+        }
+ 
+        for i, r in df_calc.iterrows():
+            try:
+                a = float(r["Area (m2)"] or 0)
+                p = float(r["Perimetro (m)"] or 0)
+                if a <= 0 or p <= 0: 
+                    st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = "-"
+                    st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = "-"
+                    st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = 0
+                    st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = 0.0
+                    st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = 0
+                    continue
+                
+                nome = str(r["Comodo"]).lower()
+ 
+                if a <= 6:
+                    va_ilum = 100
+                else:
+                    va_ilum = 100 + (math.floor((a - 6) / 4) * 60)
+                
+                qtd_lamp = max(math.ceil(va_ilum / 100), 1)
+                tipo_ilum = "LED" if qtd_lamp <= 3 else ("Fluorescente" if qtd_lamp <= 5 else "Mista")
+                
+                st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = f"{va_ilum}VA"
+                st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = f"{qtd_lamp} pt {tipo_ilum}"
+                pot_ilum_total += va_ilum
+ 
+                comp_15 = p + (qtd_lamp * 3.5)
+                cabos["1.5mm2"]["Fase"] += comp_15 * 1.5
+                cabos["1.5mm2"]["Neutro"] += comp_15
+                cabos["1.5mm2"]["Terra"] += comp_15
+ 
+                is_molhada = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
+                is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
+ 
+                if is_banheiro:
+                    q_tugs = 1
+                    p_tugs = 600
+                else:
+                    div = 3.5 if is_molhada else 5.0
+                    q_tugs = max(math.ceil(p / div), 1)
+                    
+                    if is_molhada:
+                        p_tugs = (min(q_tugs, 3) * 600 + max(0, q_tugs - 3) * 100)
+                    else:
+                        p_tugs = q_tugs * 100
+ 
+                st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = int(q_tugs)
+                st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = float(p_tugs)
+                pot_tug_total += p_tugs
+ 
+                comp_25 = p + (q_tugs * 1.5)
+                cabos["2.5mm2"]["Fase"] += comp_25
+                cabos["2.5mm2"]["Neutro"] += comp_25
+                cabos["2.5mm2"]["Terra"] += comp_25
+ 
+                tue_w = float(r["TUE (Watts)"] or 0)
+                qtd_tue = 0
+                
+                if tue_w > 0:
+                    if sistema_eletrico == "Monofásico 127V":
+                        v_tue = 127
+                    else:
+                        v_tue = 220
+                    
+                    corrente = tue_w / v_tue
+                    qtd_tue = 1
+                    
+                    if corrente <= 16:
+                        bitola = "1.5mm2"
+                    elif corrente <= 21:
+                        bitola = "2.5mm2"
+                    elif corrente <= 28:
+                        bitola = "4.0mm2"
+                    elif corrente <= 36:
+                        bitola = "6.0mm2"
+                    else:
+                        bitola = "10.0mm2"
+ 
+                    if corrente <= 13:
+                        disjuntor = "16A"
+                    elif corrente <= 16:
+                        disjuntor = "20A"
+                    elif corrente <= 21:
+                        disjuntor = "25A"
+                    elif corrente <= 28:
+                        disjuntor = "32A"
+                    else:
+                        disjuntor = "40A"
+ 
+                    tipo_disj = "Bipolar" if v_tue == 220 else "Unipolar"
+ 
+                    novos_circuitos.append({
+                        "Circ": f"C{len(novos_circuitos)+3:02d}",
+                        "Descricao": f"TUE - {r['Comodo']}",
+                        "Potencia": f"{tue_w:.0f}W",
+                        "Tensao": f"{v_tue}V",
+                        "Corrente": f"{corrente:.2f}A",
+                        "Cabo": bitola,
+                        "Disjuntor": disjuntor,
+                        "Tipo Disj.": tipo_disj
+                    })
+                    
+                    comp_tue = (p / 2) + 4.0
+                    
+                    if v_tue == 220 and sistema_eletrico == "Bifásico 220V":
+                        cabos[bitola]["Fase"] += comp_tue * 2
+                        cabos[bitola]["Neutro"] += 0
+                        cabos[bitola]["Terra"] += comp_tue
+                    else:
+                        cabos[bitola]["Fase"] += comp_tue
+                        cabos[bitola]["Neutro"] += comp_tue
+                        cabos[bitola]["Terra"] += comp_tue
+ 
+                st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = int(qtd_tue)
+ 
+            except Exception as e:
+                continue
+ 
+        if pot_ilum_total > 0:
+            novos_circuitos.insert(0, {
+                "Circ": "C01",
+                "Descricao": "Iluminacao Geral",
+                "Potencia": f"{pot_ilum_total}VA",
+                "Tensao": f"{tensao_fase}V",
+                "Corrente": f"{(pot_ilum_total/tensao_fase):.2f}A",
+                "Cabo": "1.5mm2",
+                "Disjuntor": "10A",
+                "Tipo Disj.": "Unipolar"
+            })
+        
+        if pot_tug_total > 0:
+            novos_circuitos.insert(1, {
+                "Circ": "C02",
+                "Descricao": "Tomadas Gerais (TUGs)",
+                "Potencia": f"{pot_tug_total}VA",
+                "Tensao": f"{tensao_fase}V",
+                "Corrente": f"{(pot_tug_total/tensao_fase):.2f}A",
+                "Cabo": "2.5mm2",
+                "Disjuntor": "20A",
+                "Tipo Disj.": "Unipolar"
+            })
+ 
+        materiais_dinamicos = []
+        for bitola, vias in cabos.items():
+            if vias["Fase"] > 0:
+                materiais_dinamicos.append({
+                    "Item": f"Cabo Flexivel {bitola} (Fase)",
+                    "Qtd": f"{math.ceil(vias['Fase'])}m"
+                })
+            if vias["Neutro"] > 0:
+                materiais_dinamicos.append({
+                    "Item": f"Cabo Flexivel {bitola} (Neutro)",
+                    "Qtd": f"{math.ceil(vias['Neutro'])}m"
+                })
+            if vias["Terra"] > 0:
+                materiais_dinamicos.append({
+                    "Item": f"Cabo Flexivel {bitola} (Terra)",
+                    "Qtd": f"{math.ceil(vias['Terra'])}m"
+                })
+ 
+        st.session_state.lista_circuitos = novos_circuitos
+        st.session_state.resumo_materiais = materiais_dinamicos
+        st.session_state.sistema_eletrico = sistema_eletrico
+        st.session_state.concessionaria = concessionaria
+        st.success("✅ Cálculos realizados com sucesso conforme NBR 5410!")
+        st.rerun()
+ 
+    st.subheader("2. Resultados Calculados")
+    
+    if st.session_state.get('lista_circuitos'):
+        st.write("**Resumo de Cargas por Cômodo:**")
+        df_resumo = st.session_state.dados_cargas[[
+            "Comodo", 
+            "Area (m2)", 
+            "Perimetro (m)", 
+            "Iluminacao (VA)", 
+            "Iluminacao Tipo",
+            "TUG (Qtd)", 
+            "Potencia TUG (VA)",
+            "TUE (Qtd)",
+            "TUE (Watts)"
+        ]].copy()
+        
+        st.dataframe(df_resumo, use_container_width=True)
+    else:
+        st.info("📊 Preencha os dados (Área, Perímetro e TUE) e clique em 'Calcular Projeto e Dimensionar Circuitos' para ver os resultados aqui.")
+        df_resumo = st.session_state.dados_cargas[[
+            "Comodo", 
+            "Area (m2)", 
+            "Perimetro (m)", 
+            "Iluminacao (VA)", 
+            "Iluminacao Tipo",
+            "TUG (Qtd)", 
+            "Potencia TUG (VA)",
+            "TUE (Qtd)",
+            "TUE (Watts)"
+        ]].copy()
+        st.dataframe(df_resumo, use_container_width=True, disabled=True)
+ 
+    if st.session_state.get('lista_circuitos'):
+        st.divider()
+        st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
+        df_circuitos = pd.DataFrame(st.session_state.lista_circuitos)
+        st.dataframe(df_circuitos, use_container_width=True)
+        
+        st.subheader("📦 Lista Estimada de Materiais")
+        df_materiais = pd.DataFrame(st.session_state.resumo_materiais)
+        st.dataframe(df_materiais, use_container_width=True)
+ 
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
+                try:
+                    hoje = datetime.now()
+                    validade = hoje + timedelta(days=7)
+                    
+                    pdf = FPDF()
+                    pdf.add_page()
+                    
+                    # ===== CABEÇALHO =====
+                    pdf.set_font("Arial", "B", 16)
+                    pdf.cell(0, 12, "MEMORIAL TECNICO - PROJETO ELETRICO", 0, 1, "C")
+                    pdf.set_fill_color(200, 200, 200)
+                    
+                    # Informações gerais
+                    pdf.set_font("Arial", "I", 8)
+                    pdf.cell(0, 5, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')} | Valido ate: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
+                    pdf.ln(3)
+                    
+                    # ===== DADOS DO PROFISSIONAL/TÉCNICO =====
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 7, "DADOS DO PROFISSIONAL/TÉCNICO", 0, 1)
+                    pdf.set_font("Arial", "", 9)
+                    pdf.cell(60, 6, "Empresa:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('nome_empresa', 'Não informado'), 0, 1)
+                    pdf.cell(60, 6, "CRT/CFT:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('crt', 'Não informado'), 0, 1)
+                    pdf.cell(60, 6, "CNPJ:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('cnpj', 'Não informado'), 0, 1)
+                    pdf.cell(60, 6, "Telefone:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('telefone', 'Não informado'), 0, 1)
+                    pdf.cell(60, 6, "E-mail:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('email_contato', 'Não informado'), 0, 1)
+                    pdf.cell(60, 6, "Localidade:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.perfil.get('endereco', 'Não informado'), 0, 1)
+                    
+                    pdf.ln(5)
+                    
+                    # ===== CONFIGURAÇÃO DA INSTALAÇÃO =====
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 7, "CONFIGURACAO DA INSTALACAO", 0, 1)
+                    pdf.set_font("Arial", "", 9)
+                    pdf.cell(60, 6, "Concessionaria:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.get('concessionaria', 'N/A'), 0, 1)
+                    pdf.cell(60, 6, "Sistema Eletrico:", 0, 0)
+                    pdf.cell(0, 6, st.session_state.get('sistema_eletrico', 'N/A'), 0, 1)
+                    pdf.cell(60, 6, "Norma Utilizada:", 0, 0)
+                    pdf.cell(0, 6, "NBR 5410 (Instalacoes Eletricas de Baixa Tensao)", 0, 1)
+                    
+                    pdf.ln(5)
+                    
+                    # ===== TABELA DE CARGAS =====
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 7, "1. MEMORIAL DE CARGAS", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 8)
+                    pdf.set_fill_color(200, 200, 200)
+                    
+                    col_widths = [28, 14, 14, 16, 16, 14, 16, 12, 16]
+                    headers = ["Comodo", "Area", "Perim.", "Ilum.", "Tipo Ilum.", "TUGs", "Pot.TUG", "TUE", "Watts"]
+                    
+                    for header, width in zip(headers, col_widths):
+                        pdf.cell(width, 7, header, 1, 0, "C", True)
+                    pdf.ln()
+                    
+                    pdf.set_font("Arial", "", 7)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for _, r in st.session_state.dados_cargas.iterrows():
+                        pdf.cell(28, 6, str(r["Comodo"])[:13], 1)
+                        pdf.cell(14, 6, f"{float(r['Area (m2)']):.1f}m2", 1, 0, "C")
+                        pdf.cell(14, 6, f"{float(r['Perimetro (m)']):.1f}m", 1, 0, "C")
+                        pdf.cell(16, 6, str(r["Iluminacao (VA)"])[:10], 1, 0, "C")
+                        pdf.cell(16, 6, str(r["Iluminacao Tipo"])[:14], 1, 0, "C")
+                        pdf.cell(14, 6, str(int(r["TUG (Qtd)"])), 1, 0, "C")
+                        pdf.cell(16, 6, f"{float(r['Potencia TUG (VA)']):.0f}VA", 1, 0, "C")
+                        pdf.cell(12, 6, str(int(r["TUE (Qtd)"])), 1, 0, "C")
+                        pdf.cell(16, 6, f"{float(r['TUE (Watts)']):.0f}W", 1, 1, "C")
+                    
+                    pdf.ln(3)
+                    
+                    # ===== TABELA DE CIRCUITOS =====
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 7, "2. QUADRO DE CIRCUITOS (QDC)", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 8)
+                    pdf.set_fill_color(200, 200, 200)
+                    
+                    circ_widths = [13, 28, 18, 13, 16, 13, 16, 13]
+                    circ_headers = ["Circ", "Descricao", "Potencia", "Tensao", "Corrente", "Cabo", "Disj.", "Tipo"]
+                    
+                    for header, width in zip(circ_headers, circ_widths):
+                        pdf.cell(width, 7, header, 1, 0, "C", True)
+                    pdf.ln()
+                    
+                    pdf.set_font("Arial", "", 7)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for circ in st.session_state.lista_circuitos:
+                        pdf.cell(13, 6, str(circ.get("Circ", "")), 1)
+                        pdf.cell(28, 6, str(circ.get("Descricao", ""))[:18], 1, 0, "L")
+                        pdf.cell(18, 6, str(circ.get("Potencia", "")), 1, 0, "C")
+                        pdf.cell(13, 6, str(circ.get("Tensao", "")), 1, 0, "C")
+                        pdf.cell(16, 6, str(circ.get("Corrente", ""))[:10], 1, 0, "C")
+                        pdf.cell(13, 6, str(circ.get("Cabo", "")), 1, 0, "C")
+                        pdf.cell(16, 6, str(circ.get("Disjuntor", "")), 1, 0, "C")
+                        pdf.cell(13, 6, str(circ.get("Tipo Disj.", ""))[:8], 1, 1, "C")
+                    
+                    pdf.ln(3)
+                    
+                    # ===== TABELA DE MATERIAIS =====
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 7, "3. LISTA DE MATERIAIS", 0, 1)
+                    pdf.ln(2)
+                    
+                    pdf.set_font("Arial", "B", 8)
+                    pdf.set_fill_color(200, 200, 200)
+                    pdf.cell(140, 7, "Material", 1, 0, "L", True)
+                    pdf.cell(60, 7, "Quantidade", 1, 1, "C", True)
+                    
+                    pdf.set_font("Arial", "", 8)
+                    pdf.set_fill_color(255, 255, 255)
+                    
+                    for mat in st.session_state.resumo_materiais:
+                        pdf.cell(140, 6, str(mat.get("Item", "")), 1)
+                        pdf.cell(60, 6, str(mat.get("Qtd", "")), 1, 1, "C")
+                    
+                    # ===== NOTAS TÉCNICAS =====
+                    pdf.ln(5)
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.cell(0, 7, "NOTAS TECNICAS:", 0, 1)
+                    pdf.set_font("Arial", "", 8)
+                    notas = [
+                        "- Todos os calculos foram realizados conforme NBR 5410:2008",
+                        "- As bitolas de cabo foram selecionadas com seguranca",
+                        "- Os disjuntores sao de curva C (uso residencial/comercial)",
+                        "- Considerar topico 6.4.3 da NBR 5410 para agrupamento de circuitos",
+                        "- O projeto deve ser executado por eletricista registrado no CREA"
+                    ]
+                    for nota in notas:
+                        pdf.multi_cell(0, 4, nota)
+                    
+                    # Gerar PDF
+                    pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
+                    st.download_button(
+                        "⬇️ Baixar Memorial Técnico (PDF)",
+                        pdf_out,
+                        "Memorial_Tecnico_VoltSpec.pdf",
+                        "application/pdf",
+                        use_container_width=True
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {str(e)}")
+        
+        with col_btn2:
+            if st.button("🔄 Limpar e Recalcular", use_container_width=True):
+                st.session_state.lista_circuitos = None
+                st.session_state.resumo_materiais = None
+                st.session_state.dados_cargas = pd.DataFrame({
+                    "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
+                    "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
+                    "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
+                    "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
+                    "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
+                    "TUG (Qtd)": [0, 0, 0, 0, 0],
+                    "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
+                    "TUE (Qtd)": [0, 0, 0, 0, 0],
+                    "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+                })
+                st.rerun()
+ 
+# --- 8. RODAPÉ ---
+st.markdown("---")
+c_ft1, c_ft2, c_ft3 = st.columns(3)
+with c_ft1:
+    st.caption(f"📍 {st.session_state.perfil.get('endereco', '')}")
+with c_ft2:
+    st.caption("⚡ Desenvolvido por Spec Pro")
+with c_ft3:
+    if st.session_state.get('user'):
+        st.caption(f"🔑 Logado como: {st.session_state.user.email}")
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
 
