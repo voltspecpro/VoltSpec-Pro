@@ -45,7 +45,7 @@ def montar_cabecalho_pdf(pdf, perfil):
     pdf.cell(0, 10, "VOLTSPEC PRO - MEMORIAL TECNICO", 0, 1, "C")
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 5, f"Empresa: {perfil.get('nome_empresa', 'N/A')}", 0, 1, "L")
-    pdf.cell(0, 5, f"Responsavel: {perfil.get('crt', 'N/A')} | CRT: {perfil.get('crt', 'N/A')}", 0, 1, "L")
+    pdf.cell(0, 5, f"Responsavel: {perfil.get('nome_empresa', 'N/A')} | CRT: {perfil.get('crt', 'N/A')}", 0, 1, "L")
     pdf.line(10, 32, 200, 32)
     pdf.ln(10)
  
@@ -55,19 +55,26 @@ KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
  
 @st.cache_resource
 def init_connection():
-    try: return create_client(URL_SUPA, KEY_SUPA)
-    except: return None
+    try:
+        return create_client(URL_SUPA, KEY_SUPA)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Supabase: {e}")
+        return None
  
 supabase = init_connection()
  
 def verificar_acesso_assinante(email_usuario):
     try:
-        if not supabase: return False, "Erro de conexão."
+        if not supabase:
+            return False, "Erro de conexão."
         res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
-        if not res.data: return False, "E-mail não autorizado."
-        if res.data[0].get("status") != "ativo": return False, "Acesso pendente."
+        if not res.data:
+            return False, "E-mail não autorizado."
+        if res.data[0].get("status") != "ativo":
+            return False, "Acesso pendente."
         return True, "Liberado"
-    except: return False, "Erro na verificação."
+    except Exception as e:
+        return False, f"Erro na verificação: {str(e)}"
  
 # --- 4. LOGIN E SEGURANÇA ---
 if 'logado' not in st.session_state: st.session_state.logado = False
@@ -87,15 +94,17 @@ if not st.session_state.logado:
                         st.session_state.user = res.user
                         st.session_state.logado = True
                         st.rerun()
-                except: st.error("Erro no login.")
+                except Exception as e:
+                    st.error(f"Erro no login: {str(e)}")
         with t_auth[1]:
             nem = st.text_input("Novo E-mail")
             npw = st.text_input("Nova Senha", type="password")
-            if st.button("Registar"):
+            if st.button("Registrar"):
                 try:
                     supabase.auth.sign_up({"email": nem, "password": npw})
                     st.success("Verifique o seu e-mail!")
-                except: st.error("Erro ao criar conta.")
+                except Exception as e:
+                    st.error(f"Erro ao criar conta: {str(e)}")
     st.stop()
  
 # Bloqueio de Assinatura
@@ -636,7 +645,20 @@ if aba == "⚙️ Perfil":
         st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
 
     if st.button("💾 Salvar na Nuvem"):
-        "salvar_perfil_supabase"
+        try:
+            if supabase:
+                supabase.table("perfis").upsert(
+                    {
+                        "email": st.session_state.user.email,
+                        "perfil_dados": st.session_state.perfil,
+                        "atualizado_em": datetime.now().isoformat()
+                    }
+                ).execute()
+                st.success("Perfil salvo com sucesso!")
+            else:
+                st.warning("Conexão com servidor indisponível no momento.")
+        except Exception as e:
+            st.error(f"Erro ao salvar: {str(e)}")
 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
@@ -1247,9 +1269,9 @@ elif aba == "❄️ Climatização":
     # --- GERAÇÃO DE PDF CLIMATIZAÇÃO ATUALIZADO ---
     if st.button("📄 Gerar Relatório com Sugestão de Marcas", use_container_width=True):
         try:
-            pdf = "FPDF"()
+            pdf = FPDF()
             pdf.add_page()
-            "montar_cabecalho_pdf"(pdf)
+            montar_cabecalho_pdf(pdf, st.session_state.perfil)
 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "RELATÓRIO DE DIMENSIONAMENTO E COMPRA", "B", 1, "C")
@@ -1331,9 +1353,9 @@ elif aba == "☀️ Energia Solar":
     # --- GERAÇÃO DE PDF SOLAR ---
     if st.button("📄 Gerar Estudo de Viabilidade Solar (PDF)", use_container_width=True):
         try:
-            pdf = "FPDF"()
+            pdf = FPDF()
             pdf.add_page()
-            "montar_cabecalho_pdf"(pdf)
+            montar_cabecalho_pdf(pdf, st.session_state.perfil)
 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "ESTUDO PRELIMINAR DE VIABILIDADE SOLAR", "B", 1, "C")
@@ -1418,9 +1440,9 @@ elif aba == "📉 Economia":
     # --- GERAÇÃO DE PDF ECONOMIA ---
     if st.button("📄 Gerar Laudo de Economia (PDF)", use_container_width=True):
         try:
-            pdf = "FPDF"()
+            pdf = FPDF()
             pdf.add_page()
-            "montar_cabecalho_pdf"(pdf)
+            montar_cabecalho_pdf(pdf, st.session_state.perfil)
 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "LAUDO TÉCNICO DE POTENCIAL DE ECONOMIA", "B", 1, "C")
@@ -1557,9 +1579,9 @@ elif aba == "⚡ Queda de Tensão":
     # --- GERAÇÃO DE PDF DIAGNÓSTICO ---
     if st.button("📄 Gerar Laudo de Conformidade Elétrica (PDF)", use_container_width=True):
         try:
-            pdf = "FPDF"()
+            pdf = FPDF()
             pdf.add_page()
-            "montar_cabecalho_pdf"(pdf)
+            montar_cabecalho_pdf(pdf, st.session_state.perfil)
 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "LAUDO TÉCNICO DE QUEDA DE TENSÃO", "B", 1, "C")
@@ -1616,8 +1638,8 @@ elif aba == "📐 Dimensionador":
     with col_inp3:
         fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0, help="0.70 para 3 circuitos no mesmo conduíte")
 
-    ib = pot / tensao
-    ib_corrigida = ib / fator_agrup
+    ib = pot / tensao if tensao > 0 else 0
+    ib_corrigida = ib / fator_agrup if fator_agrup > 0 else 0
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
 
     if ib_corrigida <= 15.5:   bitola_sugerida = 1.5
@@ -1660,7 +1682,10 @@ elif aba == "📐 Dimensionador":
     area_total_cabos = area_unitaria_cabo * qtd_condutores
     area_eletroduto = area_eletrodutos[eletroduto_escolhido]
     
-    taxa_ocupacao = (area_total_cabos / area_eletroduto) * 100
+    if area_eletroduto > 0:
+        taxa_ocupacao = (area_total_cabos / area_eletroduto) * 100
+    else:
+        taxa_ocupacao = 0
 
     # Definição dos limites da norma
     if qtd_condutores == 1:
