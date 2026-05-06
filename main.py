@@ -469,7 +469,7 @@ elif aba == "🏠 Cargas":
             "Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", 
             "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"
         ]].copy()
-        st.dataframe(df_resumo, use_container_width=True, disabled=True)
+        st.dataframe(df_resumo, use_container_width=True)
 
     if st.session_state.get('lista_circuitos'):
         st.divider()
