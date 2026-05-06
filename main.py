@@ -614,6 +614,7 @@ elif aba == "🏠 Cargas":
                 })
                 st.rerun()
  
+ 
 # --- 8. RODAPÉ ---
 st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
@@ -624,11 +625,6 @@ with c_ft2:
 with c_ft3:
     if st.session_state.get('user'):
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
-# --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
-aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
- 
-# --- MÓDULO PERFIL ---
-if aba == "⚙️ Perfil":
     st.header("⚙️ Configurações do Técnico")
     c1, c2 = st.columns(2)
     with c1:
@@ -657,10 +653,10 @@ if aba == "⚙️ Perfil":
             st.error(f"Erro ao salvar: {str(e)}")
  
 # --- MÓDULO CARGAS ---
-elif aba == "🏠 Cargas":
-    st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
+if aba == "🏠 Cargas":
+ st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
  
-    with st.expander("🔌 Configuração da Rede e Concessionária", expanded=True):
+with st.expander("🔌 Configuração da Rede e Concessionária", expanded=True):
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             concessionaria = st.selectbox("Selecione a Concessionária:",
@@ -680,7 +676,7 @@ elif aba == "🏠 Cargas":
                 tensao_fase_neutro = 220
  
     # Inicialização segura do DataFrame
-    if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
+if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
         st.session_state.dados_cargas = pd.DataFrame({
             "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
             "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
@@ -693,18 +689,18 @@ elif aba == "🏠 Cargas":
             "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
         })
  
-    st.subheader("1. Entrada de Dados e Medidas")
+st.subheader("1. Entrada de Dados e Medidas")
     
     # Colunas editáveis: apenas Área, Perímetro e TUE (Watts)
-    col_editar = st.columns(3)
-    with col_editar[0]:
+col_editar = st.columns(3)
+with col_editar[0]:
         st.write("**Área (m²) e Perímetro (m)**")
-    with col_editar[1]:
+with col_editar[1]:
         st.write("**TUE - Watts**")
-    with col_editar[2]:
+with col_editar[2]:
         st.write("**Resultado Calculado**")
     
-    df_editor = st.data_editor(
+df_editor = st.data_editor(
         st.session_state.dados_cargas[["Comodo", "Area (m2)", "Perimetro (m)", "TUE (Watts)"]],
         num_rows="dynamic",
         use_container_width=True,
@@ -712,7 +708,7 @@ elif aba == "🏠 Cargas":
         disabled=["Comodo"]
     )
  
-    if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
+if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
         st.session_state.dados_cargas = st.session_state.dados_cargas.iloc[:len(df_editor)].copy()
         
         # Atualizar os dados editáveis
@@ -924,9 +920,9 @@ elif aba == "🏠 Cargas":
         st.rerun()
  
     # ===== EXIBIÇÃO DA TABELA PREENCHIDA =====
-    st.subheader("2. Resultados Calculados")
+st.subheader("2. Resultados Calculados")
     
-    if st.session_state.get('lista_circuitos'):
+if st.session_state.get('lista_circuitos'):
         # Mostrar tabela completa com os resultados
         st.write("**Resumo de Cargas por Cômodo:**")
         df_resumo = st.session_state.dados_cargas[[
@@ -942,7 +938,7 @@ elif aba == "🏠 Cargas":
         ]].copy()
         
         st.dataframe(df_resumo, use_container_width=True)
-    else:
+else:
         # Mostrar tabela vazia até calcular
         st.info("📊 Preencha os dados (Área, Perímetro e TUE) e clique em 'Calcular Projeto e Dimensionar Circuitos' para ver os resultados aqui.")
         df_resumo = st.session_state.dados_cargas[[
@@ -959,7 +955,7 @@ elif aba == "🏠 Cargas":
         st.dataframe(df_resumo, use_container_width=True, disabled=True)
  
     # ===== EXIBIÇÃO DOS RESULTADOS (QDC e MATERIAIS) =====
-    if st.session_state.get('lista_circuitos'):
+if st.session_state.get('lista_circuitos'):
         st.divider()
         st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
         df_circuitos = pd.DataFrame(st.session_state.lista_circuitos)
@@ -1761,7 +1757,7 @@ elif aba == "🛒 Produtos":
             st.link_button("🚀 Ver Oferta", p["link"], use_container_width=True)
  
 # --- 8. RODAPÉ ---
-st.markdown("---")
+    st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
 with c_ft1:
     st.caption(f"📍 {st.session_state.perfil.get('endereco', '')}")
