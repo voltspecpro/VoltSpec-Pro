@@ -55,8 +55,7 @@ KEY_SUPA = st.secrets.get("SUPABASE_KEY", "")
  
 @st.cache_resource
 def init_connection():
-    try:
-        return create_client(URL_SUPA, KEY_SUPA)
+    try: return create_client(URL_SUPA, KEY_SUPA)
     except Exception as e:
         st.error(f"Erro ao conectar ao Supabase: {e}")
         return None
@@ -65,13 +64,10 @@ supabase = init_connection()
  
 def verificar_acesso_assinante(email_usuario):
     try:
-        if not supabase:
-            return False, "Erro de conexão."
+        if not supabase: return False, "Erro de conexão."
         res = supabase.table("assinaturas").select("*").eq("email", email_usuario.lower().strip()).execute()
-        if not res.data:
-            return False, "E-mail não autorizado."
-        if res.data[0].get("status") != "ativo":
-            return False, "Acesso pendente."
+        if not res.data: return False, "E-mail não autorizado."
+        if res.data[0].get("status") != "ativo": return False, "Acesso pendente."
         return True, "Liberado"
     except Exception as e:
         return False, f"Erro na verificação: {str(e)}"
@@ -630,7 +626,7 @@ with c_ft3:
         st.caption(f"🔑 Logado como: {st.session_state.user.email}")
 # --- SE O USUÁRIO TEM ACESSO, MOSTRA O SISTEMA NORMAL ---
 aba = st.radio("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"], horizontal=True)
-
+ 
 # --- MÓDULO PERFIL ---
 if aba == "⚙️ Perfil":
     st.header("⚙️ Configurações do Técnico")
@@ -643,7 +639,7 @@ if aba == "⚙️ Perfil":
         st.session_state.perfil['cnpj']          = st.text_input("CNPJ:", value=st.session_state.perfil.get('cnpj', ''))
         st.session_state.perfil['email_contato'] = st.text_input("E-mail Profissional:", value=st.session_state.perfil.get('email_contato', ''))
         st.session_state.perfil['endereco']      = st.text_input("Cidade/UF:", placeholder="Ex: Araxá - MG", value=st.session_state.perfil.get('endereco', ''))
-
+ 
     if st.button("💾 Salvar na Nuvem"):
         try:
             if supabase:
@@ -659,7 +655,7 @@ if aba == "⚙️ Perfil":
                 st.warning("Conexão com servidor indisponível no momento.")
         except Exception as e:
             st.error(f"Erro ao salvar: {str(e)}")
-
+ 
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
     st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
@@ -1126,7 +1122,7 @@ elif aba == "🏠 Cargas":
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
     st.info("Este módulo utiliza o Método dos Lúmens para calcular a quantidade de luminárias necessária.")
-
+ 
     with st.expander("🏠 Dados do Ambiente", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -1141,7 +1137,7 @@ elif aba == "💡 Luminotecnica":
         h_util = h_total - h_trabalho - h_luminaria
         area_total = comprimento * largura
         st.write(f"**Área Total:** {area_total:.2f} m² | **Altura Útil (h):** {h_util:.2f} m")
-
+ 
     with st.expander("📚 Parâmetros Normativos"):
         col1, col2 = st.columns(2)
         with col1:
@@ -1158,31 +1154,31 @@ elif aba == "💡 Luminotecnica":
                 nivel_iluminancia = st.number_input("Nível de Iluminância desejado (Lux):", value=500, key="lum_lux_custom")
             else:
                 nivel_iluminancia = int(lux_sugerido.split('(')[1].split(' ')[0])
-
+ 
         with col2:
             fator_utilizacao = st.slider("Fator de Utilização (η):", 0.1, 1.0, 0.5, help="Depende da luminária e cores das paredes.", key="lum_fu")
             fator_perdas = st.select_slider("Fator de Manutenção (Limpeza):", options=[0.6, 0.7, 0.8], value=0.8, help="0.8: Limpo | 0.7: Médio | 0.6: Sujo", key="lum_fm")
-
+ 
     with st.expander("🔦 Especificações da Lâmpada/Luminária"):
         c1, c2 = st.columns(2)
         with c1:
             fluxo_unitario = st.number_input("Fluxo Luminoso por Luminária (Lúmens):", min_value=1, value=2500, help="Ver no catálogo do fabricante", key="lum_fluxo_u")
         with c2:
             potencia_unit = st.number_input("Potência por Luminária (W):", min_value=1, value=24, key="lum_pot_u")
-
+ 
     fluxo_total_necessario = (nivel_iluminancia * area_total) / (fator_utilizacao * fator_perdas)
     quantidade_n = fluxo_total_necessario / fluxo_unitario
     quantidade_final = int(-(-quantidade_n // 1))
     
     potencia_total = quantidade_final * potencia_unit
     densidade_potencia = potencia_total / area_total if area_total > 0 else 0
-
+ 
     st.subheader("📊 Resultado do Dimensionamento")
     res1, res2, res3 = st.columns(3)
     res1.metric("Qtd. de Luminárias", f"{quantidade_final} un")
     res2.metric("Potência Total", f"{potencia_total} W")
     res3.metric("W/m²", f"{densidade_potencia:.2f}")
-
+ 
     st.write("---")
     st.subheader("📐 Sugestão de Distribuição")
     proporcao = comprimento / largura
@@ -1191,7 +1187,7 @@ elif aba == "💡 Luminotecnica":
     
     st.write(f"Para uma distribuição uniforme, tente instalar em uma malha de aproximadamente:")
     st.info(f"**{round(colunas)} luminárias ao longo do comprimento** x **{round(linhas)} luminárias ao longo da largura**.")
-
+ 
     dados_atuais = {
         "nivel_lux": nivel_iluminancia,
         "qtd_luminarias": quantidade_final,
@@ -1199,7 +1195,7 @@ elif aba == "💡 Luminotecnica":
         "area": area_total,
         "distribuicao": f"{round(colunas)}x{round(linhas)}"
     }
-
+ 
     try:
         pdf_bytes = "gerar_pdf_resultado_lumino"(dados_atuais, st.session_state.get('perfil', {}))
         if pdf_bytes:
@@ -1216,7 +1212,7 @@ elif aba == "💡 Luminotecnica":
 elif aba == "❄️ Climatização":
     st.header("❄️ Dimensionamento e Sugestão de Aparelhos")
     st.info("Cálculo de carga térmica e curadoria dos melhores modelos do mercado.")
-
+ 
     # Dicionário de Referência de Modelos (Padrão Inverter de Alta Eficiência)
     modelos_referencia = {
         7000:  "LG Dual Inverter Voice ou Samsung WindFree",
@@ -1229,7 +1225,7 @@ elif aba == "❄️ Climatização":
         48000: "Trane Inverter / Carrier Piso Teto",
         60000: "Carrier / York (Piso Teto ou Cassete)"
     }
-
+ 
     with st.expander("🏠 Características do Ambiente", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -1238,14 +1234,14 @@ elif aba == "❄️ Climatização":
         with c2:
             num_pessoas = st.number_input("Número de Pessoas (além de você):", min_value=0, value=1)
             num_eletronicos = st.number_input("Número de Eletrônicos (TV, PC, etc):", min_value=0, value=1)
-
+ 
     # Lógica do Cálculo
     fator_area = 800 if "Sol Forte" in exposicao_sol else 600
     btu_base = area_clima * fator_area
     btu_pessoas = num_pessoas * 600
     btu_aparelhos = num_eletronicos * 600
     total_btus = btu_base + btu_pessoas + btu_aparelhos
-
+ 
     # Sugestão de Aparelho Comercial
     comerciais = sorted(modelos_referencia.keys())
     sugestao_btu = comerciais[0]
@@ -1255,24 +1251,24 @@ elif aba == "❄️ Climatização":
             break
     
     modelo_nome = modelos_referencia.get(sugestao_btu, "Consulte um especialista para grandes áreas")
-
+ 
     st.divider()
     res_c1, res_c2 = st.columns(2)
     with res_c1:
         st.metric("Carga Térmica Total", f"{int(total_btus)} BTUs")
     with res_c2:
         st.metric("Capacidade Comercial", f"{sugestao_btu} BTUs", delta="Sugerido")
-
+ 
     st.success(f"🏆 **Modelos Recomendados (Linha Inverter):** \n\n {modelo_nome}")
     st.caption("Priorizamos marcas com maior rede de assistência técnica e eficiência energética (Selo Procel A).")
-
+ 
     # --- GERAÇÃO DE PDF CLIMATIZAÇÃO ATUALIZADO ---
     if st.button("📄 Gerar Relatório com Sugestão de Marcas", use_container_width=True):
         try:
             pdf = FPDF()
             pdf.add_page()
             montar_cabecalho_pdf(pdf, st.session_state.perfil)
-
+ 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "RELATÓRIO DE DIMENSIONAMENTO E COMPRA", "B", 1, "C")
             
@@ -1282,7 +1278,7 @@ elif aba == "❄️ Climatização":
             pdf.set_font("Arial", "", 10)
             pdf.cell(0, 6, f"- Área: {area_clima} m2 | Carga Calculada: {int(total_btus)} BTUs", 0, 1)
             pdf.cell(0, 6, f"- Fator Solar: {exposicao_sol}", 0, 1)
-
+ 
             pdf.ln(5)
             pdf.set_fill_color(240, 240, 240)
             pdf.set_font("Arial", "B", 12)
@@ -1296,13 +1292,13 @@ elif aba == "❄️ Climatização":
             pdf.cell(0, 8, "Marcas e Modelos Sugeridos (Alta Eficiência):", 0, 1)
             pdf.set_font("Arial", "", 10)
             pdf.multi_cell(0, 8, f"{modelo_nome}", 1, "C")
-
+ 
             pdf.ln(10)
             pdf.set_font("Arial", "I", 9)
             pdf.multi_cell(0, 5, "Nota Técnica: Recomendamos a instalação de modelos com tecnologia INVERTER "
                                "para economia de até 70% na conta de luz. A instalação deve seguir as "
                                "normas do fabricante para preservação da garantia.")
-
+ 
             pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
             st.download_button("⬇️ Baixar Relatório de Compra", pdf_output, "Guia_Compra_Ar.pdf", "application/pdf", use_container_width=True)
             
@@ -1312,7 +1308,7 @@ elif aba == "❄️ Climatização":
 elif aba == "☀️ Energia Solar":
     st.header("☀️ Estimativa Solar Fotovoltaica")
     st.info("Gere uma estimativa rápida de investimento e economia para sistemas On-Grid.")
-
+ 
     with st.expander("📊 Dados de Consumo e Local", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -1321,7 +1317,7 @@ elif aba == "☀️ Energia Solar":
         with c2:
             potencia_painel = st.selectbox("Potência do Painel (Watts):", [450, 550, 600, 650], index=1)
             eficiencia_sistema = 0.80 # 20% de perdas
-
+ 
     # Lógica do Cálculo Técnico
     # Fórmula: Potência (kWp) = Consumo / (30 dias * HSP * Eficiência)
     hsp_araxa = 5.2 
@@ -1333,30 +1329,30 @@ elif aba == "☀️ Energia Solar":
     
     # Estimativa de Área (Média de 2.6m² por painel de 550W)
     area_estimada = qtd_paineis * 2.6
-
+ 
     # Financeiro (Estimativa de mercado: R$ 3,80 por Wp instalado)
     investimento_estimado = potencia_real_instalada * 1000 * 3.80
     economia_mensal = consumo_kwh * tarifa_energia
     payback_meses = investimento_estimado / economia_mensal if economia_mensal > 0 else 0
-
+ 
     # Exibição dos Resultados
     st.divider()
     res1, res2, res3 = st.columns(3)
     res1.metric("Painéis Necessários", f"{qtd_paineis} un")
     res2.metric("Potência do Sistema", f"{potencia_real_instalada:.2f} kWp")
     res3.metric("Área no Telhado", f"{area_estimada:.1f} m²")
-
+ 
     fin1, fin2 = st.columns(2)
     fin1.metric("Investimento Estimado", f"R$ {investimento_estimado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
     fin2.metric("Payback (Retorno)", f"{math.ceil(payback_meses/12)} anos", f"{int(payback_meses)} meses")
-
+ 
     # --- GERAÇÃO DE PDF SOLAR ---
     if st.button("📄 Gerar Estudo de Viabilidade Solar (PDF)", use_container_width=True):
         try:
             pdf = FPDF()
             pdf.add_page()
             montar_cabecalho_pdf(pdf, st.session_state.perfil)
-
+ 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "ESTUDO PRELIMINAR DE VIABILIDADE SOLAR", "B", 1, "C")
             
@@ -1368,7 +1364,7 @@ elif aba == "☀️ Energia Solar":
             pdf.cell(0, 7, f"- Potência Geradora Recomendada: {potencia_real_instalada:.2f} kWp", 0, 1)
             pdf.cell(0, 7, f"- Quantidade de Módulos ({potencia_painel}W): {qtd_paineis} unidades", 0, 1)
             pdf.cell(0, 7, f"- Espaço Necessário em Telhado: {area_estimada:.1f} m2", 0, 1)
-
+ 
             pdf.ln(5)
             pdf.set_font("Arial", "B", 12)
             pdf.cell(0, 10, "2. Análise Financeira Estimada", 0, 1)
@@ -1376,14 +1372,14 @@ elif aba == "☀️ Energia Solar":
             pdf.cell(0, 7, f"- Investimento Aproximado: R$ {investimento_estimado:,.2f}", 0, 1)
             pdf.cell(0, 7, f"- Economia Mensal Estimada: R$ {economia_mensal:,.2f}", 0, 1)
             pdf.cell(0, 7, f"- Tempo de Retorno (Payback): aprox. {math.ceil(payback_meses/12)} anos", 0, 1)
-
+ 
             pdf.ln(10)
             pdf.set_fill_color(230, 230, 230)
             pdf.set_font("Arial", "I", 9)
             pdf.multi_cell(0, 5, "AVISO: Este relatório é uma estimativa baseada na média de radiação solar da região (HSP 5.2). "
                                "Os valores de investimento podem variar conforme a marca dos equipamentos, tipo de telhado e "
                                "distância do quadro de energia. Requer visita técnica e projeto executivo.", 1, "J", True)
-
+ 
             pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
             st.download_button("⬇️ Baixar Estudo Solar", pdf_output, "Estudo_Solar_VoltSpec.pdf", "application/pdf", use_container_width=True)
             
@@ -1393,7 +1389,7 @@ elif aba == "☀️ Energia Solar":
 elif aba == "📉 Economia":
     st.header("📉 Simulador de Economia de Energia")
     st.info("Mostre ao seu cliente quanto ele economiza ao modernizar as instalações.")
-
+ 
     with st.expander("💡 Modernização de Iluminação", expanded=True):
         col_ilum1, col_ilum2 = st.columns(2)
         with col_ilum1:
@@ -1402,7 +1398,7 @@ elif aba == "📉 Economia":
         with col_ilum2:
             horas_uso = st.number_input("Horas de uso por dia:", min_value=1, max_value=24, value=6)
             tarifa_simulada = st.number_input("Tarifa de Energia (R$/kWh):", value=0.95, key="tarifa_eco")
-
+ 
     # Lógica Iluminação
     watts_antiga = 60 if "Incandescente" in tipo_antiga else 40
     watts_nova = 9 if "Incandescente" in tipo_antiga else 18
@@ -1411,7 +1407,7 @@ elif aba == "📉 Economia":
     consumo_mensal_novo = (watts_nova * qtd_lampadas * horas_uso * 30) / 1000
     economia_kwh_mes = consumo_mensal_antigo - consumo_mensal_novo
     economia_rs_mes = economia_kwh_mes * tarifa_simulada
-
+ 
     st.divider()
     
     with st.expander("❄️ Upgrade para Ar-Condicionado Inverter"):
@@ -1427,23 +1423,23 @@ elif aba == "📉 Economia":
     consumo_ref_hora = (btu_ar / 9000) * 1.0 # Base 1kWh para cada 9k BTUs
     consumo_ar_conv = consumo_ref_hora * horas_ar * dias_uso_mes
     economia_ar_rs = (consumo_ar_conv * 0.40) * tarifa_simulada # 40% de economia
-
+ 
     # Resumo Geral
     st.subheader("💰 Potencial de Economia Total")
     total_eco_mes = economia_rs_mes + economia_ar_rs
     total_eco_ano = total_eco_mes * 12
-
+ 
     res_e1, res_e2 = st.columns(2)
     res_e1.metric("Economia Mensal Estimada", f"R$ {total_eco_mes:.2f}")
     res_e2.metric("Economia Anual Estimada", f"R$ {total_eco_ano:.2f}", delta="Redução de Custos")
-
+ 
     # --- GERAÇÃO DE PDF ECONOMIA ---
     if st.button("📄 Gerar Laudo de Economia (PDF)", use_container_width=True):
         try:
             pdf = FPDF()
             pdf.add_page()
             montar_cabecalho_pdf(pdf, st.session_state.perfil)
-
+ 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "LAUDO TÉCNICO DE POTENCIAL DE ECONOMIA", "B", 1, "C")
             
@@ -1455,7 +1451,7 @@ elif aba == "📉 Economia":
             pdf.cell(0, 7, f"- Redução mensal de consumo: {economia_kwh_mes:.2f} kWh", 0, 1)
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 7, f"- Economia financeira em iluminação: R$ {economia_rs_mes:.2f}/mês", 0, 1)
-
+ 
             pdf.ln(5)
             pdf.set_font("Arial", "B", 11)
             pdf.cell(0, 10, "2. Eficiência em Climatização (Inverter)", 0, 1)
@@ -1463,7 +1459,7 @@ elif aba == "📉 Economia":
             pdf.cell(0, 7, f"- Upgrade para tecnologia Inverter em aparelho de {btu_ar} BTUs.", 0, 1)
             pdf.set_font("Arial", "B", 10)
             pdf.cell(0, 7, f"- Economia financeira em climatização: R$ {economia_ar_rs:.2f}/mês", 0, 1)
-
+ 
             pdf.ln(10)
             pdf.set_fill_color(0, 128, 0)
             pdf.set_text_color(255, 255, 255)
@@ -1475,13 +1471,13 @@ elif aba == "📉 Economia":
             pdf.set_font("Arial", "I", 9)
             pdf.multi_cell(0, 5, "Nota: Este simulador utiliza médias de consumo baseadas em especificações técnicas de fabricantes. "
                                "A economia real pode variar de acordo com a marca dos equipamentos e hábitos de uso.")
-
+ 
             pdf_output = pdf.output(dest="S").encode("latin-1", "ignore")
             st.download_button("⬇️ Baixar Laudo de Economia", pdf_output, "Laudo_Economia_VoltSpec.pdf", "application/pdf", use_container_width=True)
             
         except Exception as e:
             st.error(f"Erro ao gerar PDF: {e}")
-
+ 
 # --- MÓDULO ORÇAMENTOS ---
 elif aba == "💰 Orçamentos":
     st.header("💰 Orçamentos de Serviços")
@@ -1497,15 +1493,15 @@ elif aba == "💰 Orçamentos":
         {"Descricao": "Laudo de Conformidade",           "Qtd": 0, "Preco": 350.0}
     ]
     df_serv = st.data_editor(pd.DataFrame(servicos), num_rows="dynamic", use_container_width=True, key="orc_edt")
-
+ 
     total_orc = (df_serv["Qtd"] * df_serv["Preco"]).sum()
     st.subheader(f"Total Serviços: R$ {total_orc:,.2f}")
-
+ 
     if st.button("📄 Gerar PDF Orçamento"):
         pdf = "gerar_pdf_universal"(f"ORCAMENTO - {cliente}", df_serv, [100, 20, 35, 35], ["Descricao", "Qtd", "Unit.", "Subtotal"])
         if pdf:
             st.download_button("⬇️ Baixar PDF", pdf, "Orcamento.pdf", "application/pdf")
-
+ 
 # --- MÓDULO MATERIAIS ---
 elif aba == "📦 Materiais":
     st.header("📦 Lista de Materiais Elétricos")
@@ -1519,11 +1515,11 @@ elif aba == "📦 Materiais":
         {"Descricao": "Eletroduto Corrugado 3/4 (50m)",   "Qtd": 0, "Preco": 75.0}
     ]
     df_mat = st.data_editor(pd.DataFrame(materiais), num_rows="dynamic", use_container_width=True, key="mat_edt")
-
+ 
     total_mat = (df_mat["Qtd"] * df_mat["Preco"]).sum()
     st.subheader(f"Total Materiais: R$ {total_mat:,.2f}")
     st.info("💡 Dica: Verifique sempre a bitola do cabo no 'Dimensionador' antes de fechar o pedido.")
-
+ 
     if st.button("📄 Gerar PDF Materiais"):
         pdf = "gerar_pdf_universal"("LISTA DE MATERIAIS", df_mat, [100, 20, 35, 35], ["Descricao", "Qtd", "Unit.", "Subtotal"])
         if pdf:
@@ -1532,7 +1528,7 @@ elif aba == "📦 Materiais":
 elif aba == "⚡ Queda de Tensão":
     st.header("⚡ Diagnóstico de Queda de Tensão (NBR 5410)")
     st.info("Verifique se a fiação existente está perdendo energia e colocando os equipamentos em risco.")
-
+ 
     with st.expander("🔌 Dados da Instalação", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
@@ -1543,7 +1539,7 @@ elif aba == "⚡ Queda de Tensão":
             secao_cabo = st.selectbox("Seção do Cabo Atual (mm²):", [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50])
             material_cabo = st.radio("Material do Condutor:", ["Cobre", "Alumínio"], horizontal=True)
             fase_sistema = st.radio("Tipo de Circuito:", ["Monofásico/Bifásico", "Trifásico"], horizontal=True)
-
+ 
     # Lógica do Cálculo Técnico (Fórmula: DeltaV = (k * L * I * rho) / S)
     # rho cobre = 0.0172 / rho aluminio = 0.0282
     rho = 0.0172 if material_cabo == "Cobre" else 0.0282
@@ -1552,11 +1548,11 @@ elif aba == "⚡ Queda de Tensão":
     queda_volts = (k * rho * distancia_m * corrente_a) / secao_cabo
     queda_percentual = (queda_volts / v_nominal) * 100
     v_final = v_nominal - queda_volts
-
+ 
     # Critérios NBR 5410 (Geralmente 4% para circuitos terminais)
     limite_norma = 4.0
     esta_dentro = queda_percentual <= limite_norma
-
+ 
     st.divider()
     res1, res2, res3 = st.columns(3)
     res1.metric("Queda em Volts", f"{queda_volts:.2f} V")
@@ -1568,21 +1564,21 @@ elif aba == "⚡ Queda de Tensão":
         res2.metric("Queda Percentual", f"{queda_percentual:.2f} %", "⚠️ Fora da Norma", delta_color="inverse")
         
     res3.metric("Tensão na Carga", f"{v_final:.1f} V")
-
+ 
     # Alerta Visual
     if not esta_dentro:
         st.warning(f"🚨 **Atenção:** A queda de tensão ultrapassou os {limite_norma}% recomendados pela NBR 5410. "
                    "Isso causa aquecimento dos cabos, desperdício de energia e pode danificar motores e eletrônicos.")
     else:
         st.success("✅ A fiação está adequadamente dimensionada para esta distância e carga.")
-
+ 
     # --- GERAÇÃO DE PDF DIAGNÓSTICO ---
     if st.button("📄 Gerar Laudo de Conformidade Elétrica (PDF)", use_container_width=True):
         try:
             pdf = FPDF()
             pdf.add_page()
             montar_cabecalho_pdf(pdf, st.session_state.perfil)
-
+ 
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "LAUDO TÉCNICO DE QUEDA DE TENSÃO", "B", 1, "C")
             
@@ -1594,7 +1590,7 @@ elif aba == "⚡ Queda de Tensão":
             pdf.cell(0, 7, f"- Condutor: {secao_cabo}mm2 em {material_cabo}", 0, 1)
             pdf.cell(0, 7, f"- Comprimento do Trecho: {distancia_m} metros", 0, 1)
             pdf.cell(0, 7, f"- Corrente de Projeto: {corrente_a} A", 0, 1)
-
+ 
             pdf.ln(5)
             pdf.set_font("Arial", "B", 11)
             pdf.cell(0, 10, "2. Resultados do Diagnóstico", 0, 1)
@@ -1608,7 +1604,7 @@ elif aba == "⚡ Queda de Tensão":
             pdf.cell(0, 7, f"- Queda de Tensão Calculada: {queda_volts:.2f} V", 0, 1)
             pdf.cell(0, 7, f"- Percentual de Perda: {queda_percentual:.2f}% (Limite NBR 5410: {limite_norma}%)", 0, 1)
             pdf.cell(0, 7, f"- Tensão Final Disponível no Equipamento: {v_final:.1f} V", 0, 1)
-
+ 
             if not esta_dentro:
                 pdf.ln(5)
                 pdf.set_text_color(200, 0, 0)
@@ -1623,11 +1619,11 @@ elif aba == "⚡ Queda de Tensão":
             
         except Exception as e:
             st.error(f"Erro ao gerar PDF: {e}")
-
+ 
 # --- MÓDULO DIMENSIONADOR ---
 elif aba == "📐 Dimensionador":
     st.header("📐 Cálculo Técnico Profissional (NBR 5410)")
-
+ 
     col_inp1, col_inp2, col_inp3 = st.columns(3)
     with col_inp1:
         pot        = st.number_input("Potência Total (W):", value=1200.0, step=100.0)
@@ -1637,21 +1633,21 @@ elif aba == "📐 Dimensionador":
         dist   = st.number_input("Distância do Quadro (m):", value=15.0, step=1.0)
     with col_inp3:
         fator_agrup = st.slider("Fator de Agrupamento:", 0.4, 1.0, 1.0, help="0.70 para 3 circuitos no mesmo conduíte")
-
+ 
     ib = pot / tensao if tensao > 0 else 0
     ib_corrigida = ib / fator_agrup if fator_agrup > 0 else 0
     bitola_minima = 1.5 if tipo_carga == "Iluminação" else 2.5
-
+ 
     if ib_corrigida <= 15.5:   bitola_sugerida = 1.5
     elif ib_corrigida <= 21:   bitola_sugerida = 2.5
     elif ib_corrigida <= 28:   bitola_sugerida = 4.0
     elif ib_corrigida <= 36:   bitola_sugerida = 6.0
     else:                      bitola_sugerida = 10.0
-
+ 
     bitola_final     = max(bitola_sugerida, bitola_minima)
     queda_v          = (2 * dist * ib * 0.0172) / bitola_final
     percentual_queda = (queda_v / tensao) * 100 if tensao > 0 else 0
-
+ 
     st.divider()
     c_res1, c_res2, c_res3 = st.columns(3)
     with c_res1:
@@ -1663,20 +1659,20 @@ elif aba == "📐 Dimensionador":
         st.metric("Queda de Tensão", f"{percentual_queda:.2f} %", delta=f"{queda_v:.2f} V", delta_color=color)
     with c_res3:
         st.metric("Bitola Final", f"{bitola_final} mm²")
-
+ 
     # --- INÍCIO DA ADIÇÃO: DIMENSIONAMENTO DE ELETRODUTOS ---
     st.subheader("🕳️ Ocupação do Eletroduto")
     
     # Valores de referência comerciais aproximados (em mm²)
     area_cabos = {1.5: 6.0, 2.5: 7.5, 4.0: 11.0, 6.0: 14.5, 10.0: 22.5}
     area_eletrodutos = {"20mm (1/2\")": 176, "25mm (3/4\")": 283, "32mm (1\")": 530, "40mm (1 1/4\")": 907}
-
+ 
     col_el1, col_el2 = st.columns(2)
     with col_el1:
         qtd_condutores = st.number_input("Qtd. de Condutores no Trecho:", min_value=1, value=3, step=1, help="Ex: Fase + Neutro + Terra")
     with col_el2:
         eletroduto_escolhido = st.selectbox("Tamanho do Eletroduto:", list(area_eletrodutos.keys()))
-
+ 
     # Lógica de cálculo
     area_unitaria_cabo = area_cabos.get(bitola_final, bitola_final * 2.5) # Se a bitola passar de 10mm², usa um fator de segurança
     area_total_cabos = area_unitaria_cabo * qtd_condutores
@@ -1686,7 +1682,7 @@ elif aba == "📐 Dimensionador":
         taxa_ocupacao = (area_total_cabos / area_eletroduto) * 100
     else:
         taxa_ocupacao = 0
-
+ 
     # Definição dos limites da norma
     if qtd_condutores == 1:
         limite_ocupacao = 53
@@ -1694,13 +1690,13 @@ elif aba == "📐 Dimensionador":
         limite_ocupacao = 31
     else:
         limite_ocupacao = 40
-
+ 
     # Feedback visual com barra de progresso no Streamlit
     cor_barra = "green" if taxa_ocupacao <= limite_ocupacao else "red"
     st.progress(min(taxa_ocupacao / 100, 1.0))
     st.caption(f"Ocupação atual: **{taxa_ocupacao:.1f}%** | Limite NBR 5410: **{limite_ocupacao}%**")
     # --- FIM DA ADIÇÃO ---
-
+ 
     st.subheader("🛡️ Verificação de Conformidade")
     erros, avisos = [], []
     
@@ -1712,17 +1708,17 @@ elif aba == "📐 Dimensionador":
     # Integração do eletroduto na verificação de erros
     if taxa_ocupacao > limite_ocupacao:
         erros.append(f"Eletroduto superlotado! A taxa de {taxa_ocupacao:.1f}% ultrapassa o limite de {limite_ocupacao}% para {qtd_condutores} condutores.")
-
+ 
     disjuntor_sugerido = math.ceil(ib / 5) * 5
     if disjuntor_sugerido < 10:
         disjuntor_sugerido = 10
-
+ 
     if not erros and not avisos:
         st.success("✅ Circuito em conformidade com a NBR 5410.")
     else:
         for erro in erros:   st.error(f"❌ **CONFORMIDADE:** {erro}")
         for aviso in avisos: st.warning(f"⚠️ **OBSERVAÇÃO:** {aviso}")
-
+ 
     with st.expander("📝 Detalhes do Dimensionamento"):
         st.write(f"""
         - **Cabo:** Cobre com isolação em PVC (70°C).
@@ -1731,7 +1727,7 @@ elif aba == "📐 Dimensionador":
         - **Disjuntor Sugerido:** {disjuntor_sugerido}A (Curva B para iluminação, C para motores/TUE).
         - **Eletroduto:** {eletroduto_escolhido} (Área ocupada: {area_total_cabos:.1f} mm² de {area_eletroduto} mm²).
         """)
-
+ 
 # --- MÓDULO PRODUTOS ---
 elif aba == "🛒 Produtos":
     st.header("🛒 Vitrine de Ferramentas (Mercado Livre)")
@@ -1763,7 +1759,7 @@ elif aba == "🛒 Produtos":
             st.markdown(f"<div style='height: 45px; text-align: center; font-size: 14px;'><b>{p['nome']}</b></div>", unsafe_allow_html=True)
             
             st.link_button("🚀 Ver Oferta", p["link"], use_container_width=True)
-
+ 
 # --- 8. RODAPÉ ---
 st.markdown("---")
 c_ft1, c_ft2, c_ft3 = st.columns(3)
