@@ -8,7 +8,7 @@ import unicodedata
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (ESTÉTICA MOBILE) ---
 st.set_page_config(
-    page_title="VoltSpec Pocket",
+    page_title="VoltSpec Pro",
     page_icon="⚡",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -110,18 +110,18 @@ def gerar_pdf_resultado_lumino(dados_atuais, perfil):
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'cnpj': '', 'telefone': '', 'email_contato': '', 'endereco': ''}
 
-# Garantindo a estrutura correta para não sumir as colunas
+# Tabela iniciando zerada (com 3 linhas em branco para facilitar no celular, podendo adicionar mais)
 if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
     st.session_state.dados_cargas = pd.DataFrame({
-        "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
-        "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
-        "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
-        "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
-        "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
-        "TUG (Qtd)": [0, 0, 0, 0, 0],
-        "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
-        "TUE (Qtd)": [0, 0, 0, 0, 0],
-        "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+        "Comodo": ["", "", ""],
+        "Area (m2)": [0.0, 0.0, 0.0],
+        "Perimetro (m)": [0.0, 0.0, 0.0],
+        "Iluminacao (VA)": ["-", "-", "-"],
+        "Iluminacao Tipo": ["-", "-", "-"],
+        "TUG (Qtd)": [0, 0, 0],
+        "Potencia TUG (VA)": [0.0, 0.0, 0.0],
+        "TUE (Qtd)": [0, 0, 0],
+        "TUE (Watts)": [0.0, 0.0, 0.0]
     })
 
 if 'lista_circuitos' not in st.session_state: st.session_state.lista_circuitos = []
@@ -172,18 +172,21 @@ elif aba == "🏠 Cargas":
 
     st.subheader("1. Entrada de Dados e Medidas")
     
-    st.write("**Área (m²), Perímetro (m) e TUE - Watts**")
+    st.write("**Comodo, Área (m²), Perímetro (m) e TUE - Watts**")
+    
+    # O "disabled" foi removido para permitir que você digite os nomes dos cômodos
     df_editor = st.data_editor(
         st.session_state.dados_cargas[["Comodo", "Area (m2)", "Perimetro (m)", "TUE (Watts)"]],
         num_rows="dynamic",
         use_container_width=True,
-        key="editor_cargas_v1",
-        disabled=["Comodo"]
+        key="editor_cargas_v1"
     )
 
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
         st.session_state.dados_cargas = st.session_state.dados_cargas.iloc[:len(df_editor)].copy()
         
+        # Agora o sistema salva o nome do cômodo que você digitou
+        st.session_state.dados_cargas["Comodo"] = df_editor["Comodo"].values
         st.session_state.dados_cargas["Area (m2)"] = df_editor["Area (m2)"].values
         st.session_state.dados_cargas["Perimetro (m)"] = df_editor["Perimetro (m)"].values
         st.session_state.dados_cargas["TUE (Watts)"] = df_editor["TUE (Watts)"].values
@@ -205,6 +208,8 @@ elif aba == "🏠 Cargas":
             try:
                 a = float(r["Area (m2)"] or 0)
                 p = float(r["Perimetro (m)"] or 0)
+                
+                # Se a área for zero, ignora essa linha (útil se você não preencher todas as linhas vazias)
                 if a <= 0 or p <= 0: 
                     st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = "-"
                     st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = "-"
@@ -268,27 +273,17 @@ elif aba == "🏠 Cargas":
                     corrente = tue_w / v_tue
                     qtd_tue = 1
                     
-                    if corrente <= 16:
-                        bitola = "1.5mm2"
-                    elif corrente <= 21:
-                        bitola = "2.5mm2"
-                    elif corrente <= 28:
-                        bitola = "4.0mm2"
-                    elif corrente <= 36:
-                        bitola = "6.0mm2"
-                    else:
-                        bitola = "10.0mm2"
+                    if corrente <= 16: bitola = "1.5mm2"
+                    elif corrente <= 21: bitola = "2.5mm2"
+                    elif corrente <= 28: bitola = "4.0mm2"
+                    elif corrente <= 36: bitola = "6.0mm2"
+                    else: bitola = "10.0mm2"
 
-                    if corrente <= 13:
-                        disjuntor = "16A"
-                    elif corrente <= 16:
-                        disjuntor = "20A"
-                    elif corrente <= 21:
-                        disjuntor = "25A"
-                    elif corrente <= 28:
-                        disjuntor = "32A"
-                    else:
-                        disjuntor = "40A"
+                    if corrente <= 13: disjuntor = "16A"
+                    elif corrente <= 16: disjuntor = "20A"
+                    elif corrente <= 21: disjuntor = "25A"
+                    elif corrente <= 28: disjuntor = "32A"
+                    else: disjuntor = "40A"
 
                     tipo_disj = "Bipolar" if v_tue == 220 else "Unipolar"
 
@@ -345,21 +340,9 @@ elif aba == "🏠 Cargas":
 
         materiais_dinamicos = []
         for bitola, vias in cabos.items():
-            if vias["Fase"] > 0:
-                materiais_dinamicos.append({
-                    "Item": f"Cabo Flexivel {bitola} (Fase)",
-                    "Qtd": f"{math.ceil(vias['Fase'])}m"
-                })
-            if vias["Neutro"] > 0:
-                materiais_dinamicos.append({
-                    "Item": f"Cabo Flexivel {bitola} (Neutro)",
-                    "Qtd": f"{math.ceil(vias['Neutro'])}m"
-                })
-            if vias["Terra"] > 0:
-                materiais_dinamicos.append({
-                    "Item": f"Cabo Flexivel {bitola} (Terra)",
-                    "Qtd": f"{math.ceil(vias['Terra'])}m"
-                })
+            if vias["Fase"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase)", "Qtd": f"{math.ceil(vias['Fase'])}m"})
+            if vias["Neutro"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Neutro)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
+            if vias["Terra"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Terra)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
 
         st.session_state.lista_circuitos = novos_circuitos
         st.session_state.resumo_materiais = materiais_dinamicos
@@ -379,7 +362,7 @@ elif aba == "🏠 Cargas":
         
         st.dataframe(df_resumo, use_container_width=True)
     else:
-        st.info("📊 Preencha os dados (Área, Perímetro e TUE) e clique em 'Calcular Projeto e Dimensionar Circuitos' para ver os resultados aqui.")
+        st.info("📊 Preencha os dados e clique em 'Calcular Projeto' para ver os resultados aqui.")
         df_resumo = st.session_state.dados_cargas[[
             "Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", 
             "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"
@@ -404,7 +387,6 @@ elif aba == "🏠 Cargas":
                 pdf = FPDF()
                 pdf.add_page()
                 
-                # ===== CABEÇALHO =====
                 pdf.set_font("Arial", "B", 16)
                 pdf.cell(0, 12, "MEMORIAL TECNICO - PROJETO ELETRICO", 0, 1, "C")
                 pdf.set_fill_color(200, 200, 200)
@@ -413,7 +395,6 @@ elif aba == "🏠 Cargas":
                 pdf.cell(0, 5, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')} | Valido ate: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
                 pdf.ln(3)
                 
-                # ===== DADOS DO PROFISSIONAL/TÉCNICO =====
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(0, 7, "DADOS DO PROFISSIONAL/TECNICO", 0, 1)
                 pdf.set_font("Arial", "", 9)
@@ -432,7 +413,6 @@ elif aba == "🏠 Cargas":
                 
                 pdf.ln(5)
 
-                # ===== CONFIGURAÇÃO DA INSTALAÇÃO =====
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(0, 7, "CONFIGURACAO DA INSTALACAO", 0, 1)
                 pdf.set_font("Arial", "", 9)
@@ -445,7 +425,6 @@ elif aba == "🏠 Cargas":
                 
                 pdf.ln(5)
                 
-                # ===== TABELA DE CARGAS =====
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(0, 7, "1. MEMORIAL DE CARGAS", 0, 1)
                 pdf.ln(2)
@@ -476,7 +455,6 @@ elif aba == "🏠 Cargas":
                 
                 pdf.ln(3)
 
-                # ===== TABELA DE CIRCUITOS =====
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(0, 7, "2. QUADRO DE CIRCUITOS (QDC)", 0, 1)
                 pdf.ln(2)
@@ -506,7 +484,6 @@ elif aba == "🏠 Cargas":
                 
                 pdf.ln(3)
                 
-                # ===== TABELA DE MATERIAIS =====
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(0, 7, "3. LISTA DE MATERIAIS", 0, 1)
                 pdf.ln(2)
@@ -523,7 +500,6 @@ elif aba == "🏠 Cargas":
                     pdf.cell(140, 6, str(mat.get("Item", "")), 1)
                     pdf.cell(60, 6, str(mat.get("Qtd", "")), 1, 1, "C")
                 
-                # ===== NOTAS TÉCNICAS =====
                 pdf.ln(5)
                 pdf.set_font("Arial", "B", 9)
                 pdf.cell(0, 7, "NOTAS TECNICAS:", 0, 1)
@@ -538,7 +514,6 @@ elif aba == "🏠 Cargas":
                 for nota in notas:
                     pdf.multi_cell(0, 4, nota)
                 
-                # Gerar PDF
                 pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
                 st.download_button(
                     "⬇️ Baixar Memorial Técnico (PDF)",
@@ -551,22 +526,22 @@ elif aba == "🏠 Cargas":
             except Exception as e:
                 st.error(f"Erro ao gerar PDF: {str(e)}")
         
+        # O botão limpar agora retorna uma planilha vazia com o campo Comodo pronto pra digitar
         if st.button("🔄 Limpar e Recalcular", use_container_width=True):
             st.session_state.lista_circuitos = None
             st.session_state.resumo_materiais = None
             st.session_state.dados_cargas = pd.DataFrame({
-                "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
-                "Area (m2)": [15.0, 10.0, 12.0, 10.0, 4.5],
-                "Perimetro (m)": [16.0, 13.0, 14.0, 13.0, 9.0],
-                "Iluminacao (VA)": ["-", "-", "-", "-", "-"],
-                "Iluminacao Tipo": ["-", "-", "-", "-", "-"],
-                "TUG (Qtd)": [0, 0, 0, 0, 0],
-                "Potencia TUG (VA)": [0.0, 0.0, 0.0, 0.0, 0.0],
-                "TUE (Qtd)": [0, 0, 0, 0, 0],
-                "TUE (Watts)": [0.0, 0.0, 0.0, 0.0, 5500.0]
+                "Comodo": ["", "", ""],
+                "Area (m2)": [0.0, 0.0, 0.0],
+                "Perimetro (m)": [0.0, 0.0, 0.0],
+                "Iluminacao (VA)": ["-", "-", "-"],
+                "Iluminacao Tipo": ["-", "-", "-"],
+                "TUG (Qtd)": [0, 0, 0],
+                "Potencia TUG (VA)": [0.0, 0.0, 0.0],
+                "TUE (Qtd)": [0, 0, 0],
+                "TUE (Watts)": [0.0, 0.0, 0.0]
             })
             st.rerun()
-
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
