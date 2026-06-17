@@ -174,7 +174,6 @@ elif aba == "🏠 Cargas":
     
     st.write("**Comodo, Área (m²), Perímetro (m) e TUE - Watts**")
     
-    # O "disabled" foi removido para permitir que você digite os nomes dos cômodos
     df_editor = st.data_editor(
         st.session_state.dados_cargas[["Comodo", "Area (m2)", "Perimetro (m)", "TUE (Watts)"]],
         num_rows="dynamic",
@@ -183,13 +182,18 @@ elif aba == "🏠 Cargas":
     )
 
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
-        st.session_state.dados_cargas = st.session_state.dados_cargas.iloc[:len(df_editor)].copy()
         
-        # Agora o sistema salva o nome do cômodo que você digitou
-        st.session_state.dados_cargas["Comodo"] = df_editor["Comodo"].values
-        st.session_state.dados_cargas["Area (m2)"] = df_editor["Area (m2)"].values
-        st.session_state.dados_cargas["Perimetro (m)"] = df_editor["Perimetro (m)"].values
-        st.session_state.dados_cargas["TUE (Watts)"] = df_editor["TUE (Watts)"].values
+        # --- CORREÇÃO DO ERRO ---
+        # Absorve exatamente as linhas e colunas que vieram do editor (aceitando se linhas foram adicionadas/removidas)
+        st.session_state.dados_cargas = df_editor.copy()
+        
+        # Recria as colunas de saída vazias para garantir a estrutura correta sem dar erro de tamanho
+        st.session_state.dados_cargas["Iluminacao (VA)"] = "-"
+        st.session_state.dados_cargas["Iluminacao Tipo"] = "-"
+        st.session_state.dados_cargas["TUG (Qtd)"] = 0
+        st.session_state.dados_cargas["Potencia TUG (VA)"] = 0.0
+        st.session_state.dados_cargas["TUE (Qtd)"] = 0
+        # ------------------------
         
         df_calc = st.session_state.dados_cargas.copy()
         novos_circuitos = []
@@ -209,7 +213,6 @@ elif aba == "🏠 Cargas":
                 a = float(r["Area (m2)"] or 0)
                 p = float(r["Perimetro (m)"] or 0)
                 
-                # Se a área for zero, ignora essa linha (útil se você não preencher todas as linhas vazias)
                 if a <= 0 or p <= 0: 
                     st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = "-"
                     st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = "-"
@@ -526,7 +529,6 @@ elif aba == "🏠 Cargas":
             except Exception as e:
                 st.error(f"Erro ao gerar PDF: {str(e)}")
         
-        # O botão limpar agora retorna uma planilha vazia com o campo Comodo pronto pra digitar
         if st.button("🔄 Limpar e Recalcular", use_container_width=True):
             st.session_state.lista_circuitos = None
             st.session_state.resumo_materiais = None
