@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilo para manter a interface limpa
+# Estilo para manter a interface limpa e os botões bonitos
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -22,6 +22,16 @@ st.markdown("""
     header {visibility: hidden;}
     .stApp { background-color: #ffffff; color: #1e293b; }
     .stButton>button { border-radius: 8px; font-weight: bold; height: 3em; width: 100%; }
+    
+    /* Estilização para o menu horizontal (radio) ficar parecendo botões de app */
+    div.row-widget.stRadio > div { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    div.row-widget.stRadio > div > label { 
+        background-color: #f1f5f9; 
+        padding: 10px 15px; 
+        border-radius: 8px; 
+        cursor: pointer;
+    }
+    div.row-widget.stRadio > div > label[data-baseweb="radio"]:hover { background-color: #e2e8f0; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,6 +110,7 @@ def gerar_pdf_resultado_lumino(dados_atuais, perfil):
 if 'perfil' not in st.session_state:
     st.session_state.perfil = {'nome_empresa': '', 'crt': '', 'cnpj': '', 'telefone': '', 'email_contato': '', 'endereco': ''}
 
+# Garantindo a estrutura correta para não sumir as colunas
 if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.columns.tolist() != ["Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"]:
     st.session_state.dados_cargas = pd.DataFrame({
         "Comodo": ["Sala", "Cozinha", "Quarto 1", "Quarto 2", "Banheiro"],
@@ -116,9 +127,20 @@ if 'dados_cargas' not in st.session_state or st.session_state.dados_cargas.colum
 if 'lista_circuitos' not in st.session_state: st.session_state.lista_circuitos = []
 if 'resumo_materiais' not in st.session_state: st.session_state.resumo_materiais = []
 
-# --- 4. ESTRUTURA DE ABAS (MENU SUSPENSO PARA MOBILE) ---
+# --- 4. ESTRUTURA DE NAVEGAÇÃO (MENU ORIGINAL HORIZONTAL) ---
 st.title("⚡ VoltSpec Pocket")
-aba = st.selectbox("Navegação:", ["⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica","❄️ Climatização","☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"])
+
+# Retornando para o menu original com ícones lado a lado
+aba = st.radio(
+    "", 
+    [
+        "⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "❄️ Climatização", 
+        "☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", 
+        "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"
+    ],
+    horizontal=True,
+    label_visibility="collapsed"
+)
 st.divider()
 
 # --- MÓDULO PERFIL ---
@@ -619,7 +641,7 @@ elif aba == "💡 Luminotecnica":
             st.download_button(
                 label="📥 Gerar e Baixar Relatório (PDF)",
                 data=pdf_bytes,
-                file_name=f"Luminotecnico_{st.session_state.perfil.get('nome_empresa', 'VoltSpec')}.pdf",
+                file_name="Luminotecnico.pdf",
                 mime="application/pdf",
                 use_container_width=True,
                 key="btn_download_lumino"
@@ -772,7 +794,7 @@ elif aba == "☀️ Energia Solar":
             pdf.ln(10)
             pdf.set_fill_color(230, 230, 230)
             pdf.set_font("Arial", "I", 9)
-            pdf.multi_cell(0, 5, "AVISO: Este relatorio e uma estimativa baseada na media de radiacao solar da regiao (HSP 5.2). "
+            pdf.multi_cell(0, 5, "AVISO: Este relatorio e uma estimativa baseada na media de radiacao solar da regiao. "
                                "Os valores de investimento podem variar conforme a marca dos equipamentos, tipo de telhado e "
                                "distancia do quadro de energia. Requer visita tecnica e projeto executivo.", 1, "J", True)
 
