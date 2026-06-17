@@ -128,7 +128,7 @@ if 'lista_circuitos' not in st.session_state: st.session_state.lista_circuitos =
 if 'resumo_materiais' not in st.session_state: st.session_state.resumo_materiais = []
 
 # --- 4. ESTRUTURA DE NAVEGAÇÃO (MENU ORIGINAL HORIZONTAL) ---
-st.title("⚡ VoltSpec Pocket")
+st.title("⚡ VoltSpec Pro")
 
 # Retornando para o menu original com ícones lado a lado
 aba = st.radio(
@@ -136,7 +136,7 @@ aba = st.radio(
     [
         "⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "❄️ Climatização", 
         "☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", 
-        "📐 Dimensionador", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"
+        "📐 Dimensionador", "🤖 Automação" "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"
     ],
     horizontal=True,
     label_visibility="collapsed"
@@ -238,6 +238,56 @@ elif aba == "🏠 Cargas":
                 st.session_state.resumo_materiais = None
                 st.session_state.dados_cargas = pd.DataFrame({"Comodo": ["", "", ""], "Area (m2)": [0.0, 0.0, 0.0], "Perimetro (m)": [0.0, 0.0, 0.0], "TUE (Watts)": [0.0, 0.0, 0.0]})
                 st.rerun()
+
+                # --- MÓDULO AUTOMAÇÃO RESIDENCIAL ---
+elif aba == "🤖 Automação":
+    st.header("🤖 Automação Residencial")
+    st.info("Planeje a inteligência da sua casa: Sensores, Relés e Assistentes.")
+
+    with st.expander("💡 O que você deseja automatizar?", expanded=True):
+        foco = st.multiselect("Categorias:", [
+            "Iluminação (Relés/Dimmers)", 
+            "Segurança (Sensores/Câmeras)", 
+            "Climatização (Ar/Ventilador)", 
+            "Energia (Monitoramento/Tomadas)"
+        ])
+        
+        qtde_reles = st.number_input("Quantidade de Relés Wi-Fi (ex: Sonoff/Tuya):", min_value=0, value=1)
+        qtde_sensores = st.number_input("Quantidade de Sensores (Presença/Abertura):", min_value=0, value=0)
+        possui_hub = st.checkbox("Possui Hub Zigbee?")
+
+    if st.button("🚀 Calcular Projeto de Automação"):
+        # Lógica simples de estimativa
+        potencia_repouso = (qtde_reles * 0.5) + (qtde_sensores * 0.1) # W
+        if possui_hub: potencia_repouso += 5.0
+        
+        custo_estimado = (qtde_reles * 55.0) + (qtde_sensores * 45.0) + (200.0 if possui_hub else 0)
+        
+        st.divider()
+        c1, c2 = st.columns(2)
+        c1.metric("Consumo Standby", f"{potencia_repouso:.1f} W")
+        c2.metric("Investimento Estimado", f"R$ {custo_estimado:,.2f}")
+        
+        st.write("### 🛠️ Checklist de Instalação:")
+        st.write("- [ ] **Verificar Neutro:** A maioria dos relés inteligentes precisa de Neutro na caixinha.")
+        st.write("- [ ] **Sinal Wi-Fi:** Testar sinal no local antes de fechar a caixinha.")
+        st.write("- [ ] **Conexão:** Definir se será Tuya (App SmartLife) ou Home Assistant.")
+
+    st.subheader("📚 Dicas Técnicas")
+    with st.expander("✅ Dica: O problema do Neutro"):
+        st.write("""
+        A maioria dos interruptores antigos no Brasil não possui cabo Neutro. 
+        Se o seu projeto não tiver neutro, você precisará de:
+        1. **Relés sem Neutro:** Usam um capacitor na lâmpada.
+        2. **Passar cabo neutro:** Recomendado para maior estabilidade.
+        """)
+        
+    with st.expander("✅ Dica: Zigbee vs Wi-Fi"):
+        st.write("""
+        - **Wi-Fi:** Fácil de instalar, não precisa de central, mas lota o roteador.
+        - **Zigbee:** Muito mais estável, economiza bateria nos sensores, mas **precisa de um Hub** para conectar ao Wi-Fi.
+        """)
+        
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
