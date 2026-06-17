@@ -155,7 +155,7 @@ if aba == "⚙️ Perfil":
 
     if st.button("💾 Salvar Dados Localmente"):
         st.success("Perfil salvo! Os próximos relatórios serão gerados com estes dados.")
-
+        
 # --- MÓDULO CARGAS ---
 elif aba == "🏠 Cargas":
     st.header("📋 Dimensionamento Profissional (NBR 5410 + Materiais)")
@@ -163,15 +163,9 @@ elif aba == "🏠 Cargas":
     with st.expander("🔌 Configuração da Rede e Concessionária", expanded=True):
         concessionaria = st.selectbox("Selecione a Concessionária:", ["CEMIG (MG)", "CPFL (SP)", "ENEL (RJ/SP)", "EQUATORIAL", "Outra (Manual)"])
         sistema_eletrico = st.selectbox("Sistema Elétrico:", ["Monofásico 127V", "Bifásico 220V"], index=0)
-        if sistema_eletrico == "Monofásico 127V":
-            tensao_fase = 127
-            tensao_fase_neutro = 127
-        else:
-            tensao_fase = 220
-            tensao_fase_neutro = 220
+        tensao_fase = 127 if sistema_eletrico == "Monofásico 127V" else 220
 
-    st.subheader("1. Entrada de Dados e Medidas")
-    
+    st.subheader("1. Entrada de Dados")
     st.write("**Comodo, Área (m²), Perímetro (m) e TUE - Watts**")
     
     df_editor = st.data_editor(
@@ -182,368 +176,91 @@ elif aba == "🏠 Cargas":
     )
 
     if st.button("⚡ Calcular Projeto e Dimensionar Circuitos", type="primary", use_container_width=True):
-        
-        # --- CORREÇÃO DO ERRO ---
-        # Absorve exatamente as linhas e colunas que vieram do editor (aceitando se linhas foram adicionadas/removidas)
         st.session_state.dados_cargas = df_editor.copy()
-        
-        # Recria as colunas de saída vazias para garantir a estrutura correta sem dar erro de tamanho
         st.session_state.dados_cargas["Iluminacao (VA)"] = "-"
         st.session_state.dados_cargas["Iluminacao Tipo"] = "-"
         st.session_state.dados_cargas["TUG (Qtd)"] = 0
         st.session_state.dados_cargas["Potencia TUG (VA)"] = 0.0
         st.session_state.dados_cargas["TUE (Qtd)"] = 0
-        # ------------------------
         
         df_calc = st.session_state.dados_cargas.copy()
         novos_circuitos = []
-        pot_ilum_total = 0
-        pot_tug_total = 0
-
-        cabos = {
-            "1.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "2.5mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "4.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "6.0mm2":  {"Fase": 0, "Neutro": 0, "Terra": 0},
-            "10.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0},
-        }
+        pot_ilum_total, pot_tug_total = 0, 0
+        cabos = {"1.5mm2": {"Fase": 0, "Neutro": 0, "Terra": 0}, "2.5mm2": {"Fase": 0, "Neutro": 0, "Terra": 0}, "4.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0}, "6.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0}, "10.0mm2": {"Fase": 0, "Neutro": 0, "Terra": 0}}
 
         for i, r in df_calc.iterrows():
-            try:
-                a = float(r["Area (m2)"] or 0)
-                p = float(r["Perimetro (m)"] or 0)
+            a, p = float(r["Area (m2)"] or 0), float(r["Perimetro (m)"] or 0)
+            if a <= 0 or p <= 0: continue
+            
+            nome = str(r["Comodo"]).lower()
+            va_ilum = 100 if a <= 6 else 100 + (math.floor((a - 6) / 4) * 60)
+            qtd_lamp = max(math.ceil(va_ilum / 100), 1)
+            tipo_ilum = "LED" if qtd_lamp <= 3 else ("Fluorescente" if qtd_lamp <= 5 else "Mista")
+            
+            st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = f"{va_ilum}VA"
+            st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = f"{qtd_lamp} pt {tipo_ilum}"
+            pot_ilum_total += va_ilum
+
+            comp_15 = p + (qtd_lamp * 3.5)
+            cabos["1.5mm2"]["Fase"] += comp_15 * 1.5
+            cabos["1.5mm2"]["Neutro"] += comp_15
+            cabos["1.5mm2"]["Terra"] += comp_15
+
+            is_molhada = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
+            is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
+            q_tugs = 1 if is_banheiro else max(math.ceil(p / (3.5 if is_molhada else 5.0)), 1)
+            p_tugs = 600 if is_banheiro else ((min(q_tugs, 3) * 600 + max(0, q_tugs - 3) * 100) if is_molhada else q_tugs * 100)
+            
+            st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = int(q_tugs)
+            st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = float(p_tugs)
+            pot_tug_total += p_tugs
+
+            comp_25 = p + (q_tugs * 1.5)
+            cabos["2.5mm2"]["Fase"] += comp_25
+            cabos["2.5mm2"]["Neutro"] += comp_25
+            cabos["2.5mm2"]["Terra"] += comp_25
+
+            tue_w = float(r["TUE (Watts)"] or 0)
+            if tue_w > 0:
+                v_tue = tensao_fase
+                corrente = tue_w / v_tue
+                bitola = "1.5mm2" if corrente <= 16 else ("2.5mm2" if corrente <= 21 else ("4.0mm2" if corrente <= 28 else ("6.0mm2" if corrente <= 36 else "10.0mm2")))
+                disjuntor = "16A" if corrente <= 13 else ("20A" if corrente <= 16 else ("25A" if corrente <= 21 else ("32A" if corrente <= 28 else "40A")))
                 
-                if a <= 0 or p <= 0: 
-                    st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = "-"
-                    st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = "-"
-                    st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = 0
-                    st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = 0.0
-                    st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = 0
-                    continue
-                
-                nome = str(r["Comodo"]).lower()
+                novos_circuitos.append({"Circ": f"C{len(novos_circuitos)+3:02d}", "Descricao": f"TUE - {r['Comodo']}", "Potencia": f"{tue_w:.0f}W", "Tensao": f"{v_tue}V", "Corrente": f"{corrente:.2f}A", "Cabo": bitola, "Disjuntor": disjuntor, "Tipo Disj.": "Bipolar" if v_tue == 220 else "Unipolar"})
+                st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = 1
+                comp_tue = (p / 2) + 4.0
+                cabos[bitola]["Fase"] += comp_tue * (2 if v_tue == 220 and sistema_eletrico == "Bifásico 220V" else 1)
+                cabos[bitola]["Neutro"] += comp_tue if v_tue != 220 else 0
+                cabos[bitola]["Terra"] += comp_tue
 
-                if a <= 6:
-                    va_ilum = 100
-                else:
-                    va_ilum = 100 + (math.floor((a - 6) / 4) * 60)
-                
-                qtd_lamp = max(math.ceil(va_ilum / 100), 1)
-                tipo_ilum = "LED" if qtd_lamp <= 3 else ("Fluorescente" if qtd_lamp <= 5 else "Mista")
-                
-                st.session_state.dados_cargas.at[i, "Iluminacao (VA)"] = f"{va_ilum}VA"
-                st.session_state.dados_cargas.at[i, "Iluminacao Tipo"] = f"{qtd_lamp} pt {tipo_ilum}"
-                pot_ilum_total += va_ilum
-
-                comp_15 = p + (qtd_lamp * 3.5)
-                cabos["1.5mm2"]["Fase"] += comp_15 * 1.5
-                cabos["1.5mm2"]["Neutro"] += comp_15
-                cabos["1.5mm2"]["Terra"] += comp_15
-
-                is_molhada = any(x in nome for x in ["cozinha", "banheiro", "servico", "lavanderia", "copa", "wc"])
-                is_banheiro = any(x in nome for x in ["banheiro", "wc", "suite"])
-
-                if is_banheiro:
-                    q_tugs = 1
-                    p_tugs = 600
-                else:
-                    div = 3.5 if is_molhada else 5.0
-                    q_tugs = max(math.ceil(p / div), 1)
-                    
-                    if is_molhada:
-                        p_tugs = (min(q_tugs, 3) * 600 + max(0, q_tugs - 3) * 100)
-                    else:
-                        p_tugs = q_tugs * 100
-
-                st.session_state.dados_cargas.at[i, "TUG (Qtd)"] = int(q_tugs)
-                st.session_state.dados_cargas.at[i, "Potencia TUG (VA)"] = float(p_tugs)
-                pot_tug_total += p_tugs
-
-                comp_25 = p + (q_tugs * 1.5)
-                cabos["2.5mm2"]["Fase"] += comp_25
-                cabos["2.5mm2"]["Neutro"] += comp_25
-                cabos["2.5mm2"]["Terra"] += comp_25
-
-                tue_w = float(r["TUE (Watts)"] or 0)
-                qtd_tue = 0
-                
-                if tue_w > 0:
-                    if sistema_eletrico == "Monofásico 127V":
-                        v_tue = 127
-                    else:
-                        v_tue = 220
-                    
-                    corrente = tue_w / v_tue
-                    qtd_tue = 1
-                    
-                    if corrente <= 16: bitola = "1.5mm2"
-                    elif corrente <= 21: bitola = "2.5mm2"
-                    elif corrente <= 28: bitola = "4.0mm2"
-                    elif corrente <= 36: bitola = "6.0mm2"
-                    else: bitola = "10.0mm2"
-
-                    if corrente <= 13: disjuntor = "16A"
-                    elif corrente <= 16: disjuntor = "20A"
-                    elif corrente <= 21: disjuntor = "25A"
-                    elif corrente <= 28: disjuntor = "32A"
-                    else: disjuntor = "40A"
-
-                    tipo_disj = "Bipolar" if v_tue == 220 else "Unipolar"
-
-                    novos_circuitos.append({
-                        "Circ": f"C{len(novos_circuitos)+3:02d}",
-                        "Descricao": f"TUE - {r['Comodo']}",
-                        "Potencia": f"{tue_w:.0f}W",
-                        "Tensao": f"{v_tue}V",
-                        "Corrente": f"{corrente:.2f}A",
-                        "Cabo": bitola,
-                        "Disjuntor": disjuntor,
-                        "Tipo Disj.": tipo_disj
-                    })
-                    
-                    comp_tue = (p / 2) + 4.0
-                    
-                    if v_tue == 220 and sistema_eletrico == "Bifásico 220V":
-                        cabos[bitola]["Fase"] += comp_tue * 2
-                        cabos[bitola]["Neutro"] += 0
-                        cabos[bitola]["Terra"] += comp_tue
-                    else:
-                        cabos[bitola]["Fase"] += comp_tue
-                        cabos[bitola]["Neutro"] += comp_tue
-                        cabos[bitola]["Terra"] += comp_tue
-
-                st.session_state.dados_cargas.at[i, "TUE (Qtd)"] = int(qtd_tue)
-
-            except Exception as e:
-                continue
-
-        if pot_ilum_total > 0:
-            novos_circuitos.insert(0, {
-                "Circ": "C01",
-                "Descricao": "Iluminacao Geral",
-                "Potencia": f"{pot_ilum_total}VA",
-                "Tensao": f"{tensao_fase}V",
-                "Corrente": f"{(pot_ilum_total/tensao_fase):.2f}A",
-                "Cabo": "1.5mm2",
-                "Disjuntor": "10A",
-                "Tipo Disj.": "Unipolar"
-            })
-        
-        if pot_tug_total > 0:
-            novos_circuitos.insert(1, {
-                "Circ": "C02",
-                "Descricao": "Tomadas Gerais (TUGs)",
-                "Potencia": f"{pot_tug_total}VA",
-                "Tensao": f"{tensao_fase}V",
-                "Corrente": f"{(pot_tug_total/tensao_fase):.2f}A",
-                "Cabo": "2.5mm2",
-                "Disjuntor": "20A",
-                "Tipo Disj.": "Unipolar"
-            })
-
-        materiais_dinamicos = []
-        for bitola, vias in cabos.items():
-            if vias["Fase"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Fase)", "Qtd": f"{math.ceil(vias['Fase'])}m"})
-            if vias["Neutro"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Neutro)", "Qtd": f"{math.ceil(vias['Neutro'])}m"})
-            if vias["Terra"] > 0: materiais_dinamicos.append({"Item": f"Cabo Flexivel {bitola} (Terra)", "Qtd": f"{math.ceil(vias['Terra'])}m"})
+        if pot_ilum_total > 0: novos_circuitos.insert(0, {"Circ": "C01", "Descricao": "Iluminacao Geral", "Potencia": f"{pot_ilum_total}VA", "Tensao": f"{tensao_fase}V", "Corrente": f"{(pot_ilum_total/tensao_fase):.2f}A", "Cabo": "1.5mm2", "Disjuntor": "10A", "Tipo Disj.": "Unipolar"})
+        if pot_tug_total > 0: novos_circuitos.insert(1, {"Circ": "C02", "Descricao": "Tomadas Gerais", "Potencia": f"{pot_tug_total}VA", "Tensao": f"{tensao_fase}V", "Corrente": f"{(pot_tug_total/tensao_fase):.2f}A", "Cabo": "2.5mm2", "Disjuntor": "20A", "Tipo Disj.": "Unipolar"})
 
         st.session_state.lista_circuitos = novos_circuitos
-        st.session_state.resumo_materiais = materiais_dinamicos
+        st.session_state.resumo_materiais = [{"Item": f"Cabo Flexivel {b} ({v})", "Qtd": f"{math.ceil(q)}m"} for b, vias in cabos.items() for v, q in vias.items() if q > 0]
         st.session_state.sistema_eletrico = sistema_eletrico
         st.session_state.concessionaria = concessionaria
-        st.success("✅ Cálculos realizados com sucesso conforme NBR 5410!")
         st.rerun()
 
-    st.subheader("2. Resultados Calculados")
-    
+    # Exibe resultados APENAS após o cálculo
     if st.session_state.get('lista_circuitos'):
-        st.write("**Resumo de Cargas por Cômodo:**")
-        df_resumo = st.session_state.dados_cargas[[
-            "Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", 
-            "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"
-        ]].copy()
-        
-        st.dataframe(df_resumo, use_container_width=True)
-    else:
-        st.info("📊 Preencha os dados e clique em 'Calcular Projeto' para ver os resultados aqui.")
-        df_resumo = st.session_state.dados_cargas[[
-            "Comodo", "Area (m2)", "Perimetro (m)", "Iluminacao (VA)", 
-            "Iluminacao Tipo", "TUG (Qtd)", "Potencia TUG (VA)", "TUE (Qtd)", "TUE (Watts)"
-        ]].copy()
-        st.dataframe(df_resumo, use_container_width=True)
-
-    if st.session_state.get('lista_circuitos'):
+        st.subheader("📊 Resultados Calculados")
+        st.dataframe(st.session_state.dados_cargas, use_container_width=True)
         st.divider()
-        st.subheader("⚡ Quadro de Circuitos Sugerido (QDC)")
-        df_circuitos = pd.DataFrame(st.session_state.lista_circuitos)
-        st.dataframe(df_circuitos, use_container_width=True)
-        
-        st.subheader("📦 Lista Estimada de Materiais")
-        df_materiais = pd.DataFrame(st.session_state.resumo_materiais)
-        st.dataframe(df_materiais, use_container_width=True)
+        st.subheader("⚡ Quadro de Circuitos (QDC)")
+        st.dataframe(pd.DataFrame(st.session_state.lista_circuitos), use_container_width=True)
+        st.subheader("📦 Lista de Materiais")
+        st.dataframe(pd.DataFrame(st.session_state.resumo_materiais), use_container_width=True)
 
-        if st.button("📄 Gerar Memorial Técnico Completo (PDF)", use_container_width=True):
-            try:
-                hoje = datetime.now()
-                validade = hoje + timedelta(days=7)
-                
-                pdf = FPDF()
-                pdf.add_page()
-                
-                pdf.set_font("Arial", "B", 16)
-                pdf.cell(0, 12, "MEMORIAL TECNICO - PROJETO ELETRICO", 0, 1, "C")
-                pdf.set_fill_color(200, 200, 200)
-                
-                pdf.set_font("Arial", "I", 8)
-                pdf.cell(0, 5, f"Gerado em: {hoje.strftime('%d/%m/%Y %H:%M')} | Valido ate: {validade.strftime('%d/%m/%Y')}", 0, 1, "R")
-                pdf.ln(3)
-                
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 7, "DADOS DO PROFISSIONAL/TECNICO", 0, 1)
-                pdf.set_font("Arial", "", 9)
-                pdf.cell(60, 6, "Empresa:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('nome_empresa', 'Nao informado'), 0, 1)
-                pdf.cell(60, 6, "CRT/CFT:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('crt', 'Nao informado'), 0, 1)
-                pdf.cell(60, 6, "CNPJ:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('cnpj', 'Nao informado'), 0, 1)
-                pdf.cell(60, 6, "Telefone:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('telefone', 'Nao informado'), 0, 1)
-                pdf.cell(60, 6, "E-mail:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('email_contato', 'Nao informado'), 0, 1)
-                pdf.cell(60, 6, "Localidade:", 0, 0)
-                pdf.cell(0, 6, st.session_state.perfil.get('endereco', 'Nao informado'), 0, 1)
-                
-                pdf.ln(5)
-
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 7, "CONFIGURACAO DA INSTALACAO", 0, 1)
-                pdf.set_font("Arial", "", 9)
-                pdf.cell(60, 6, "Concessionaria:", 0, 0)
-                pdf.cell(0, 6, str(st.session_state.get('concessionaria', 'N/A')), 0, 1)
-                pdf.cell(60, 6, "Sistema Eletrico:", 0, 0)
-                pdf.cell(0, 6, str(st.session_state.get('sistema_eletrico', 'N/A')), 0, 1)
-                pdf.cell(60, 6, "Norma Utilizada:", 0, 0)
-                pdf.cell(0, 6, "NBR 5410 (Instalacoes Eletricas de Baixa Tensao)", 0, 1)
-                
-                pdf.ln(5)
-                
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 7, "1. MEMORIAL DE CARGAS", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 8)
-                pdf.set_fill_color(200, 200, 200)
-                
-                col_widths = [28, 14, 14, 16, 16, 14, 16, 12, 16]
-                headers = ["Comodo", "Area", "Perim.", "Ilum.", "Tipo Ilum.", "TUGs", "Pot.TUG", "TUE", "Watts"]
-                
-                for header, width in zip(headers, col_widths):
-                    pdf.cell(width, 7, header, 1, 0, "C", True)
-                pdf.ln()
-                
-                pdf.set_font("Arial", "", 7)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for _, r in st.session_state.dados_cargas.iterrows():
-                    pdf.cell(28, 6, str(r["Comodo"])[:13], 1)
-                    pdf.cell(14, 6, f"{float(r['Area (m2)']):.1f}m2", 1, 0, "C")
-                    pdf.cell(14, 6, f"{float(r['Perimetro (m)']):.1f}m", 1, 0, "C")
-                    pdf.cell(16, 6, str(r["Iluminacao (VA)"])[:10], 1, 0, "C")
-                    pdf.cell(16, 6, str(r["Iluminacao Tipo"])[:14], 1, 0, "C")
-                    pdf.cell(14, 6, str(int(r["TUG (Qtd)"])), 1, 0, "C")
-                    pdf.cell(16, 6, f"{float(r['Potencia TUG (VA)']):.0f}VA", 1, 0, "C")
-                    pdf.cell(12, 6, str(int(r["TUE (Qtd)"])), 1, 0, "C")
-                    pdf.cell(16, 6, f"{float(r['TUE (Watts)']):.0f}W", 1, 1, "C")
-                
-                pdf.ln(3)
-
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 7, "2. QUADRO DE CIRCUITOS (QDC)", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 8)
-                pdf.set_fill_color(200, 200, 200)
-                
-                circ_widths = [13, 28, 18, 13, 16, 13, 16, 13]
-                circ_headers = ["Circ", "Descricao", "Potencia", "Tensao", "Corrente", "Cabo", "Disj.", "Tipo"]
-                
-                for header, width in zip(circ_headers, circ_widths):
-                    pdf.cell(width, 7, header, 1, 0, "C", True)
-                pdf.ln()
-                
-                pdf.set_font("Arial", "", 7)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for circ in st.session_state.lista_circuitos:
-                    pdf.cell(13, 6, str(circ.get("Circ", "")), 1)
-                    pdf.cell(28, 6, str(circ.get("Descricao", ""))[:18], 1, 0, "L")
-                    pdf.cell(18, 6, str(circ.get("Potencia", "")), 1, 0, "C")
-                    pdf.cell(13, 6, str(circ.get("Tensao", "")), 1, 0, "C")
-                    pdf.cell(16, 6, str(circ.get("Corrente", ""))[:10], 1, 0, "C")
-                    pdf.cell(13, 6, str(circ.get("Cabo", "")), 1, 0, "C")
-                    pdf.cell(16, 6, str(circ.get("Disjuntor", "")), 1, 0, "C")
-                    pdf.cell(13, 6, str(circ.get("Tipo Disj.", ""))[:8], 1, 1, "C")
-                
-                pdf.ln(3)
-                
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(0, 7, "3. LISTA DE MATERIAIS", 0, 1)
-                pdf.ln(2)
-                
-                pdf.set_font("Arial", "B", 8)
-                pdf.set_fill_color(200, 200, 200)
-                pdf.cell(140, 7, "Material", 1, 0, "L", True)
-                pdf.cell(60, 7, "Quantidade", 1, 1, "C", True)
-                
-                pdf.set_font("Arial", "", 8)
-                pdf.set_fill_color(255, 255, 255)
-                
-                for mat in st.session_state.resumo_materiais:
-                    pdf.cell(140, 6, str(mat.get("Item", "")), 1)
-                    pdf.cell(60, 6, str(mat.get("Qtd", "")), 1, 1, "C")
-                
-                pdf.ln(5)
-                pdf.set_font("Arial", "B", 9)
-                pdf.cell(0, 7, "NOTAS TECNICAS:", 0, 1)
-                pdf.set_font("Arial", "", 8)
-                notas = [
-                    "- Todos os calculos foram realizados conforme NBR 5410:2008",
-                    "- As bitolas de cabo foram selecionadas com seguranca",
-                    "- Os disjuntores sao de curva C (uso residencial/comercial)",
-                    "- Considerar topico 6.4.3 da NBR 5410 para agrupamento de circuitos",
-                    "- O projeto deve ser executado por eletricista registrado no CREA"
-                ]
-                for nota in notas:
-                    pdf.multi_cell(0, 4, nota)
-                
-                pdf_out = pdf.output(dest="S").encode("latin-1", "ignore")
-                st.download_button(
-                    "⬇️ Baixar Memorial Técnico (PDF)",
-                    pdf_out,
-                    "Memorial_Tecnico_VoltSpec.pdf",
-                    "application/pdf",
-                    use_container_width=True
-                )
-                
-            except Exception as e:
-                st.error(f"Erro ao gerar PDF: {str(e)}")
-        
-        if st.button("🔄 Limpar e Recalcular", use_container_width=True):
-            st.session_state.lista_circuitos = None
-            st.session_state.resumo_materiais = None
-            st.session_state.dados_cargas = pd.DataFrame({
-                "Comodo": ["", "", ""],
-                "Area (m2)": [0.0, 0.0, 0.0],
-                "Perimetro (m)": [0.0, 0.0, 0.0],
-                "Iluminacao (VA)": ["-", "-", "-"],
-                "Iluminacao Tipo": ["-", "-", "-"],
-                "TUG (Qtd)": [0, 0, 0],
-                "Potencia TUG (VA)": [0.0, 0.0, 0.0],
-                "TUE (Qtd)": [0, 0, 0],
-                "TUE (Watts)": [0.0, 0.0, 0.0]
-            })
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1: st.button("📄 Gerar PDF (Memorial)", disabled=False)
+        with col2:
+            if st.button("🔄 Limpar Tudo"):
+                st.session_state.lista_circuitos = None
+                st.session_state.resumo_materiais = None
+                st.session_state.dados_cargas = pd.DataFrame({"Comodo": ["", "", ""], "Area (m2)": [0.0, 0.0, 0.0], "Perimetro (m)": [0.0, 0.0, 0.0], "Iluminacao (VA)": ["-", "-", "-"], "Iluminacao Tipo": ["-", "-", "-"], "TUG (Qtd)": [0, 0, 0], "Potencia TUG (VA)": [0.0, 0.0, 0.0], "TUE (Qtd)": [0, 0, 0], "TUE (Watts)": [0.0, 0.0, 0.0]})
+                st.rerun()
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
