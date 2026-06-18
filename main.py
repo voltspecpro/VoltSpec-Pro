@@ -894,27 +894,33 @@ elif aba == "🤖 Automação":
             st.success(f"✅ '{item_sel_nome}' adicionado!")
             st.rerun()
 
+    # Margem interna (só você vê — fica acima da tabela, discretamente)
+    margem = st.slider("🔒 Sua Margem de Lucro (%) — não aparece no PDF:", 0, 60, 20, key="auto_margem")
+
     if st.session_state.auto_itens:
         st.divider()
         st.subheader("📋 Itens do Orçamento")
 
+        fator_margem = 1 + margem / 100
         df_auto = pd.DataFrame(st.session_state.auto_itens)
-        total_geral = df_auto["Subtotal"].sum()
 
-        df_exibir = df_auto[["Categoria", "Descricao", "Und", "Qtd", "Preco", "Subtotal"]].copy()
-        df_exibir["Preco"]    = df_exibir["Preco"].apply(lambda x: f"R$ {x:,.2f}")
-        df_exibir["Subtotal"] = df_exibir["Subtotal"].apply(lambda x: f"R$ {x:,.2f}")
-        df_exibir.columns = ["Categoria", "Descrição", "Und", "Qtd", "Preço Unit.", "Subtotal"]
+        # Preços COM margem embutida (o que o cliente verá)
+        df_auto["PrecoCliente"]    = df_auto["Preco"] * fator_margem
+        df_auto["SubtotalCliente"] = df_auto["Qtd"]  * df_auto["PrecoCliente"]
+        total_cliente = df_auto["SubtotalCliente"].sum()
+        total_custo   = df_auto["Subtotal"].sum()
+
+        # Tabela interna: mostra custo e preço ao cliente lado a lado (só na tela)
+        df_exibir = df_auto[["Categoria", "Descricao", "Und", "Qtd", "Preco", "PrecoCliente", "SubtotalCliente"]].copy()
+        df_exibir["Preco"]          = df_exibir["Preco"].apply(lambda x: f"R$ {x:,.2f}")
+        df_exibir["PrecoCliente"]   = df_exibir["PrecoCliente"].apply(lambda x: f"R$ {x:,.2f}")
+        df_exibir["SubtotalCliente"]= df_exibir["SubtotalCliente"].apply(lambda x: f"R$ {x:,.2f}")
+        df_exibir.columns = ["Categoria", "Descrição", "Und", "Qtd", "Seu Custo", "Preço ao Cliente", "Subtotal Cliente"]
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
         col_tot1, col_tot2 = st.columns(2)
-        total_fmt_br = f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        col_tot1.metric("💰 Total do Orçamento", total_fmt_br)
-
-        margem = st.slider("📈 Margem de Lucro (%):", 0, 60, 20, key="auto_margem")
-        valor_com_margem = total_geral * (1 + margem / 100)
-        margem_fmt_br = f"R$ {valor_com_margem:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        col_tot2.metric(f"💵 Com {margem}% de Margem", margem_fmt_br)
+        col_tot1.metric("🏷️ Seu custo total",     f"R$ {total_custo:,.2f}".replace(",","X").replace(".",",").replace("X","."))
+        col_tot2.metric("💰 Total ao Cliente",     f"R$ {total_cliente:,.2f}".replace(",","X").replace(".",",").replace("X","."))
 
         st.divider()
         col_limpar, col_pdf = st.columns(2)
@@ -937,6 +943,7 @@ elif aba == "🤖 Automação":
                     pdf.cell(0, 6, f"Data: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, "R")
                     pdf.ln(3)
 
+                    # Cabeçalho da tabela (sem nenhuma menção à margem)
                     pdf.set_font("Arial", "B", 9)
                     pdf.set_fill_color(30, 80, 150)
                     pdf.set_text_color(255, 255, 255)
@@ -959,38 +966,33 @@ elif aba == "🤖 Automação":
                             pdf.cell(190, 7, f"  {cat}", 1, 1, "L", True)
                             pdf.set_font("Arial", "", 8)
 
-                        desc  = limpar_texto(item["Descricao"])[:52]
-                        qtd   = int(item["Qtd"])
-                        preco = float(item["Preco"])
-                        sub   = float(item["Subtotal"])
-                        total_pdf += sub
+                        desc           = limpar_texto(item["Descricao"])[:52]
+                        qtd            = int(item["Qtd"])
+                        # Preço já com margem embutida — o cliente só vê este valor
+                        preco_cliente  = float(item["Preco"]) * fator_margem
+                        sub_cliente    = qtd * preco_cliente
+                        total_pdf     += sub_cliente
 
                         pdf.cell(90, 7, desc, 1)
                         pdf.cell(12, 7, limpar_texto(item.get("Und", "un")), 1, 0, "C")
                         pdf.cell(15, 7, str(qtd), 1, 0, "C")
-                        pdf.cell(35, 7, f"R$ {preco:,.2f}", 1, 0, "R")
-                        pdf.cell(38, 7, f"R$ {sub:,.2f}", 1, 1, "R")
+                        pdf.cell(35, 7, f"R$ {preco_cliente:,.2f}", 1, 0, "R")
+                        pdf.cell(38, 7, f"R$ {sub_cliente:,.2f}", 1, 1, "R")
 
                     pdf.ln(4)
-                    pdf.set_font("Arial", "B", 11)
+                    pdf.set_font("Arial", "B", 12)
+                    pdf.set_fill_color(30, 80, 150)
+                    pdf.set_text_color(255, 255, 255)
                     total_r = f"R$ {total_pdf:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    pdf.cell(0, 9, f"TOTAL MATERIAIS/EQUIPAMENTOS: {total_r}", 0, 1, "R")
-
-                    if margem > 0:
-                        com_marg    = total_pdf * (1 + margem / 100)
-                        marg_r      = f"R$ {com_marg:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        pdf.set_font("Arial", "B", 12)
-                        pdf.set_fill_color(30, 80, 150)
-                        pdf.set_text_color(255, 255, 255)
-                        pdf.cell(0, 10, f"VALOR FINAL COM {margem}% MARGEM: {marg_r}", 1, 1, "C", True)
-                        pdf.set_text_color(0, 0, 0)
+                    pdf.cell(0, 10, f"VALOR TOTAL: {total_r}", 1, 1, "C", True)
+                    pdf.set_text_color(0, 0, 0)
 
                     pdf.ln(8)
                     pdf.set_font("Arial", "I", 8)
                     pdf.multi_cell(0, 5, limpar_texto(
                         "Observacao: Este orcamento e valido por 15 dias. Os precos podem variar conforme "
-                        "disponibilidade de estoque. Instalacao e configuracao dos equipamentos cobrada "
-                        "separadamente, conforme complexidade do projeto."
+                        "disponibilidade de estoque. A instalacao e configuracao dos equipamentos sera "
+                        "acordada separadamente, conforme complexidade do projeto."
                     ))
 
                     pdf_bytes = pdf.output(dest="S").encode("latin-1", "ignore")
