@@ -136,7 +136,7 @@ aba = st.radio(
     [
         "⚙️ Perfil", "🏠 Cargas", "💡 Luminotecnica", "❄️ Climatização", 
         "☀️ Energia Solar", "📉 Economia", "⚡ Queda de Tensão", 
-        "📐 Dimensionador", "🤖 Automação" "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"
+        "📐 Dimensionador", "🤖 Automação", "💰 Orçamentos", "📦 Materiais", "🛒 Produtos"
     ],
     horizontal=True,
     label_visibility="collapsed"
@@ -238,56 +238,7 @@ elif aba == "🏠 Cargas":
                 st.session_state.resumo_materiais = None
                 st.session_state.dados_cargas = pd.DataFrame({"Comodo": ["", "", ""], "Area (m2)": [0.0, 0.0, 0.0], "Perimetro (m)": [0.0, 0.0, 0.0], "TUE (Watts)": [0.0, 0.0, 0.0]})
                 st.rerun()
-
-                # --- MÓDULO AUTOMAÇÃO RESIDENCIAL ---
-elif aba == "🤖 Automação":
-    st.header("🤖 Automação Residencial")
-    st.info("Planeje a inteligência da sua casa: Sensores, Relés e Assistentes.")
-
-    with st.expander("💡 O que você deseja automatizar?", expanded=True):
-        foco = st.multiselect("Categorias:", [
-            "Iluminação (Relés/Dimmers)", 
-            "Segurança (Sensores/Câmeras)", 
-            "Climatização (Ar/Ventilador)", 
-            "Energia (Monitoramento/Tomadas)"
-        ])
-        
-        qtde_reles = st.number_input("Quantidade de Relés Wi-Fi (ex: Sonoff/Tuya):", min_value=0, value=1)
-        qtde_sensores = st.number_input("Quantidade de Sensores (Presença/Abertura):", min_value=0, value=0)
-        possui_hub = st.checkbox("Possui Hub Zigbee?")
-
-    if st.button("🚀 Calcular Projeto de Automação"):
-        # Lógica simples de estimativa
-        potencia_repouso = (qtde_reles * 0.5) + (qtde_sensores * 0.1) # W
-        if possui_hub: potencia_repouso += 5.0
-        
-        custo_estimado = (qtde_reles * 55.0) + (qtde_sensores * 45.0) + (200.0 if possui_hub else 0)
-        
-        st.divider()
-        c1, c2 = st.columns(2)
-        c1.metric("Consumo Standby", f"{potencia_repouso:.1f} W")
-        c2.metric("Investimento Estimado", f"R$ {custo_estimado:,.2f}")
-        
-        st.write("### 🛠️ Checklist de Instalação:")
-        st.write("- [ ] **Verificar Neutro:** A maioria dos relés inteligentes precisa de Neutro na caixinha.")
-        st.write("- [ ] **Sinal Wi-Fi:** Testar sinal no local antes de fechar a caixinha.")
-        st.write("- [ ] **Conexão:** Definir se será Tuya (App SmartLife) ou Home Assistant.")
-
-    st.subheader("📚 Dicas Técnicas")
-    with st.expander("✅ Dica: O problema do Neutro"):
-        st.write("""
-        A maioria dos interruptores antigos no Brasil não possui cabo Neutro. 
-        Se o seu projeto não tiver neutro, você precisará de:
-        1. **Relés sem Neutro:** Usam um capacitor na lâmpada.
-        2. **Passar cabo neutro:** Recomendado para maior estabilidade.
-        """)
-        
-    with st.expander("✅ Dica: Zigbee vs Wi-Fi"):
-        st.write("""
-        - **Wi-Fi:** Fácil de instalar, não precisa de central, mas lota o roteador.
-        - **Zigbee:** Muito mais estável, economiza bateria nos sensores, mas **precisa de um Hub** para conectar ao Wi-Fi.
-        """)
-        
+                
 # --- MÓDULO Luminotecnica  ---
 elif aba == "💡 Luminotecnica":
     st.header("💡 Dimensionamento Luminotécnico (NBR ISO/CIE 8995-1)")
@@ -830,6 +781,230 @@ elif aba == "📐 Dimensionador":
         - **Disjuntor Sugerido:** {disjuntor_sugerido}A (Curva B para iluminação, C para motores/TUE).
         - **Eletroduto:** {eletroduto_escolhido} (Área ocupada: {area_total_cabos:.1f} mm² de {area_eletroduto} mm²).
         """)
+
+# --- MÓDULO AUTOMAÇÃO RESIDENCIAL ---
+elif aba == "🤖 Automação":
+    st.header("🤖 Orçamento de Automação Residencial")
+    st.info("Monte o orçamento completo de automação para o seu cliente. Selecione os itens, quantidades e gere o PDF profissional.")
+
+    if 'auto_itens' not in st.session_state:
+        st.session_state.auto_itens = []
+
+    catalogo_automacao = {
+        "🔌 Interruptores e Tomadas Inteligentes": [
+            {"nome": "Interruptor Simples Wi-Fi (1 botão)",        "preco": 89.90,  "und": "un"},
+            {"nome": "Interruptor Duplo Wi-Fi (2 botões)",         "preco": 129.90, "und": "un"},
+            {"nome": "Interruptor Triplo Wi-Fi (3 botões)",        "preco": 159.90, "und": "un"},
+            {"nome": "Interruptor Touch LED 1 Módulo",             "preco": 75.00,  "und": "un"},
+            {"nome": "Interruptor Dimmer Wi-Fi (controle de luz)", "preco": 149.90, "und": "un"},
+            {"nome": "Tomada Inteligente Wi-Fi 10A",               "preco": 79.90,  "und": "un"},
+            {"nome": "Tomada Inteligente Wi-Fi 20A (chuveiro/AC)", "preco": 99.90,  "und": "un"},
+            {"nome": "Tomada USB Inteligente (2x USB-A + Wi-Fi)",  "preco": 89.90,  "und": "un"},
+            {"nome": "Régua Inteligente 4 tomadas Wi-Fi",          "preco": 149.90, "und": "un"},
+        ],
+        "🎙️ Assistentes de Voz e Hubs": [
+            {"nome": "Amazon Echo Dot (4a geracao) - Alexa",       "preco": 349.90, "und": "un"},
+            {"nome": "Amazon Echo (5a geracao) - Alexa",           "preco": 599.90, "und": "un"},
+            {"nome": "Amazon Echo Show 8 - Tela + Alexa",          "preco": 899.90, "und": "un"},
+            {"nome": "Google Nest Mini - Google Assistente",       "preco": 299.90, "und": "un"},
+            {"nome": "Google Nest Hub (tela 7pol) - Google",       "preco": 699.90, "und": "un"},
+            {"nome": "Hub Zigbee / Z-Wave (gateway local)",        "preco": 259.90, "und": "un"},
+            {"nome": "Hub SmartThings Samsung",                    "preco": 349.90, "und": "un"},
+        ],
+        "❄️ Ar-Condicionado Inteligente": [
+            {"nome": "Controle Remoto Universal IR Wi-Fi (AC/TV)", "preco": 89.90,  "und": "un"},
+            {"nome": "AC Inteligente 9.000 BTUs Inverter Wi-Fi",   "preco": 2499.90,"und": "un"},
+            {"nome": "AC Inteligente 12.000 BTUs Inverter Wi-Fi",  "preco": 2899.90,"und": "un"},
+            {"nome": "AC Inteligente 18.000 BTUs Inverter Wi-Fi",  "preco": 3499.90,"und": "un"},
+            {"nome": "AC Inteligente 24.000 BTUs Inverter Wi-Fi",  "preco": 4299.90,"und": "un"},
+            {"nome": "Modulo Wi-Fi p/ AC convencional (retrofit)", "preco": 149.90, "und": "un"},
+        ],
+        "📺 TVs e Entretenimento": [
+            {"nome": "Smart TV 32pol LED Wi-Fi",                   "preco": 1199.90,"und": "un"},
+            {"nome": "Smart TV 43pol 4K LED Wi-Fi",                "preco": 1799.90,"und": "un"},
+            {"nome": "Smart TV 55pol 4K QLED Wi-Fi",               "preco": 2999.90,"und": "un"},
+            {"nome": "Smart TV 65pol 4K OLED Wi-Fi",               "preco": 4999.90,"und": "un"},
+            {"nome": "Chromecast com Google TV (4K)",              "preco": 399.90, "und": "un"},
+            {"nome": "Fire TV Stick 4K Max (Amazon)",              "preco": 449.90, "und": "un"},
+            {"nome": "Soundbar Inteligente Wi-Fi/Bluetooth",       "preco": 899.90, "und": "un"},
+        ],
+        "💡 Iluminação Inteligente": [
+            {"nome": "Lâmpada LED Inteligente Wi-Fi RGB 9W",       "preco": 59.90,  "und": "un"},
+            {"nome": "Lâmpada LED Inteligente Wi-Fi Branca 9W",    "preco": 44.90,  "und": "un"},
+            {"nome": "Fita LED Inteligente Wi-Fi RGB (5m)",        "preco": 129.90, "und": "un"},
+            {"nome": "Spot LED Embutir Inteligente 7W Wi-Fi",      "preco": 89.90,  "und": "un"},
+            {"nome": "Pendente/Luminária Wi-Fi Dimerizável",       "preco": 249.90, "und": "un"},
+        ],
+        "🔐 Segurança e Acesso": [
+            {"nome": "Fechadura Digital Eletrônica Wi-Fi",         "preco": 899.90, "und": "un"},
+            {"nome": "Câmera IP Wi-Fi Full HD (interna)",          "preco": 189.90, "und": "un"},
+            {"nome": "Câmera IP Wi-Fi Full HD (externa)",          "preco": 249.90, "und": "un"},
+            {"nome": "Câmera Doorbell (campainha c/ câmera Wi-Fi)","preco": 449.90, "und": "un"},
+            {"nome": "Sensor de Abertura Porta/Janela Wi-Fi",      "preco": 69.90,  "und": "un"},
+            {"nome": "Sensor de Presença / Movimento Wi-Fi",       "preco": 89.90,  "und": "un"},
+            {"nome": "Alarme Inteligente Wi-Fi (sirene+sensor)",   "preco": 199.90, "und": "un"},
+            {"nome": "NVR / DVR Wi-Fi 4 canais",                   "preco": 699.90, "und": "un"},
+        ],
+        "🌡️ Sensores e Conforto": [
+            {"nome": "Sensor Temperatura e Umidade Wi-Fi",         "preco": 79.90,  "und": "un"},
+            {"nome": "Termostato Inteligente Wi-Fi",               "preco": 259.90, "und": "un"},
+            {"nome": "Ventilador de Teto Inteligente Wi-Fi",       "preco": 699.90, "und": "un"},
+            {"nome": "Persiana / Cortina Motorizada Wi-Fi",        "preco": 899.90, "und": "un"},
+            {"nome": "Irrigador Automático Wi-Fi (jardim)",        "preco": 299.90, "und": "un"},
+        ],
+        "🔧 Infraestrutura e Instalação": [
+            {"nome": "Roteador Wi-Fi Mesh (p/ cobertura total)",   "preco": 499.90, "und": "un"},
+            {"nome": "Switch de Rede 8 portas",                    "preco": 189.90, "und": "un"},
+            {"nome": "Cabo de Rede Cat6 (por metro)",              "preco": 4.50,   "und": "m"},
+            {"nome": "Nobreak / UPS 600VA (proteção hub/router)",  "preco": 349.90, "und": "un"},
+            {"nome": "Hora Técnica de Instalação/Configuração",    "preco": 150.00, "und": "h"},
+            {"nome": "Visita Técnica + Projeto de Automação",      "preco": 350.00, "und": "vb"},
+        ],
+    }
+
+    st.subheader("➕ Adicionar Itens ao Orçamento")
+
+    col_cat, col_item = st.columns([1, 2])
+    with col_cat:
+        categoria_sel = st.selectbox("Categoria:", list(catalogo_automacao.keys()), key="auto_cat")
+    with col_item:
+        itens_cat = catalogo_automacao[categoria_sel]
+        nomes_cat = [i["nome"] for i in itens_cat]
+        item_sel_nome = st.selectbox("Produto:", nomes_cat, key="auto_item")
+
+    item_sel = next(i for i in itens_cat if i["nome"] == item_sel_nome)
+
+    col_preco, col_qtd, col_btn = st.columns([1.5, 1, 1])
+    with col_preco:
+        preco_edit = st.number_input("Preço Unit. (R$):", value=float(item_sel["preco"]), min_value=0.0, step=1.0, key="auto_preco")
+    with col_qtd:
+        qtd_edit = st.number_input("Qtd:", value=1, min_value=1, step=1, key="auto_qtd")
+    with col_btn:
+        st.write("")
+        st.write("")
+        if st.button("➕ Adicionar", use_container_width=True, type="primary"):
+            st.session_state.auto_itens.append({
+                "Categoria": categoria_sel,
+                "Descricao": item_sel_nome,
+                "Und": item_sel.get("und", "un"),
+                "Qtd": qtd_edit,
+                "Preco": preco_edit,
+                "Subtotal": qtd_edit * preco_edit
+            })
+            st.success(f"✅ '{item_sel_nome}' adicionado!")
+            st.rerun()
+
+    if st.session_state.auto_itens:
+        st.divider()
+        st.subheader("📋 Itens do Orçamento")
+
+        df_auto = pd.DataFrame(st.session_state.auto_itens)
+        total_geral = df_auto["Subtotal"].sum()
+
+        df_exibir = df_auto[["Categoria", "Descricao", "Und", "Qtd", "Preco", "Subtotal"]].copy()
+        df_exibir["Preco"]    = df_exibir["Preco"].apply(lambda x: f"R$ {x:,.2f}")
+        df_exibir["Subtotal"] = df_exibir["Subtotal"].apply(lambda x: f"R$ {x:,.2f}")
+        df_exibir.columns = ["Categoria", "Descrição", "Und", "Qtd", "Preço Unit.", "Subtotal"]
+        st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+
+        col_tot1, col_tot2 = st.columns(2)
+        total_fmt_br = f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        col_tot1.metric("💰 Total do Orçamento", total_fmt_br)
+
+        margem = st.slider("📈 Margem de Lucro (%):", 0, 60, 20, key="auto_margem")
+        valor_com_margem = total_geral * (1 + margem / 100)
+        margem_fmt_br = f"R$ {valor_com_margem:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        col_tot2.metric(f"💵 Com {margem}% de Margem", margem_fmt_br)
+
+        st.divider()
+        col_limpar, col_pdf = st.columns(2)
+
+        with col_limpar:
+            if st.button("🗑️ Limpar Lista", use_container_width=True):
+                st.session_state.auto_itens = []
+                st.rerun()
+
+        with col_pdf:
+            if st.button("📄 Gerar PDF do Orçamento", use_container_width=True, type="primary"):
+                try:
+                    pdf = FPDF()
+                    pdf.add_page()
+                    montar_cabecalho_pdf(pdf, st.session_state.perfil)
+
+                    pdf.set_font("Arial", "B", 14)
+                    pdf.cell(0, 10, "ORCAMENTO - AUTOMACAO RESIDENCIAL", 0, 1, "C")
+                    pdf.set_font("Arial", "", 9)
+                    pdf.cell(0, 6, f"Data: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, "R")
+                    pdf.ln(3)
+
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.set_fill_color(30, 80, 150)
+                    pdf.set_text_color(255, 255, 255)
+                    pdf.cell(90, 8, "DESCRICAO", 1, 0, "C", True)
+                    pdf.cell(12, 8, "UND", 1, 0, "C", True)
+                    pdf.cell(15, 8, "QTD", 1, 0, "C", True)
+                    pdf.cell(35, 8, "PRECO UNIT.", 1, 0, "C", True)
+                    pdf.cell(38, 8, "SUBTOTAL", 1, 1, "C", True)
+                    pdf.set_text_color(0, 0, 0)
+
+                    pdf.set_font("Arial", "", 8)
+                    categoria_atual = ""
+                    total_pdf = 0.0
+                    for item in st.session_state.auto_itens:
+                        cat = limpar_texto(item["Categoria"])
+                        if cat != categoria_atual:
+                            categoria_atual = cat
+                            pdf.set_fill_color(220, 230, 245)
+                            pdf.set_font("Arial", "B", 8)
+                            pdf.cell(190, 7, f"  {cat}", 1, 1, "L", True)
+                            pdf.set_font("Arial", "", 8)
+
+                        desc  = limpar_texto(item["Descricao"])[:52]
+                        qtd   = int(item["Qtd"])
+                        preco = float(item["Preco"])
+                        sub   = float(item["Subtotal"])
+                        total_pdf += sub
+
+                        pdf.cell(90, 7, desc, 1)
+                        pdf.cell(12, 7, limpar_texto(item.get("Und", "un")), 1, 0, "C")
+                        pdf.cell(15, 7, str(qtd), 1, 0, "C")
+                        pdf.cell(35, 7, f"R$ {preco:,.2f}", 1, 0, "R")
+                        pdf.cell(38, 7, f"R$ {sub:,.2f}", 1, 1, "R")
+
+                    pdf.ln(4)
+                    pdf.set_font("Arial", "B", 11)
+                    total_r = f"R$ {total_pdf:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    pdf.cell(0, 9, f"TOTAL MATERIAIS/EQUIPAMENTOS: {total_r}", 0, 1, "R")
+
+                    if margem > 0:
+                        com_marg    = total_pdf * (1 + margem / 100)
+                        marg_r      = f"R$ {com_marg:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        pdf.set_font("Arial", "B", 12)
+                        pdf.set_fill_color(30, 80, 150)
+                        pdf.set_text_color(255, 255, 255)
+                        pdf.cell(0, 10, f"VALOR FINAL COM {margem}% MARGEM: {marg_r}", 1, 1, "C", True)
+                        pdf.set_text_color(0, 0, 0)
+
+                    pdf.ln(8)
+                    pdf.set_font("Arial", "I", 8)
+                    pdf.multi_cell(0, 5, limpar_texto(
+                        "Observacao: Este orcamento e valido por 15 dias. Os precos podem variar conforme "
+                        "disponibilidade de estoque. Instalacao e configuracao dos equipamentos cobrada "
+                        "separadamente, conforme complexidade do projeto."
+                    ))
+
+                    pdf_bytes = pdf.output(dest="S").encode("latin-1", "ignore")
+                    st.download_button(
+                        "⬇️ Baixar Orçamento PDF",
+                        pdf_bytes,
+                        "Orcamento_Automacao_Residencial.pdf",
+                        "application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
+    else:
+        st.info("👆 Adicione itens ao orçamento usando o formulário acima.")
 
 # --- MÓDULO PRODUTOS ---
 elif aba == "🛒 Produtos":
